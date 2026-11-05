@@ -308,6 +308,9 @@ select { background: var(--surface-2); border: 1px solid var(--line); border-rad
 .vol input { flex: 1; }
 .vol-btn { width: 30px; height: 30px; margin: -4px -4px -4px -6px; color: var(--muted); }
 .vol-btn.on { color: var(--danger); }
+/* auto volume toggle under the slider */
+.vol-auto { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.vol-auto .tool-hint { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
 /* equalizer: full-width card with vertical band sliders */
 .tools .tool.eq { grid-column: 1 / -1; }
 .eq-bands { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }

@@ -396,7 +396,7 @@ export function playIndex(i, autoplay = true) {
     else if (cached.has(it.id)) cachedURL(it.id).then((u) => { if (u) blobURLs.set(it.id, u); setSrc(u || net, !!u); });
     else setSrc(net, false);
   }
-  prepareAround(); paintEq();
+  prepareAround(); paintEq(); normTrack();
   renderQueue(); render(); updateMediaSession();
   $("#queue .q-item.cur")?.scrollIntoView({ block: "nearest" });
 }
@@ -559,7 +559,7 @@ const EQ_PRESETS = {
   vocal: { name: "Vokal", g: [-3, -1, 3, 4, 1] },
 };
 let eqGains = store.get("lp-eq", EQ_PRESETS.flat.g);
-let eqCtx = null, eqNodes = null, eqPre = null;
+let eqCtx = null, eqNodes = null, eqPre = null, normGain = null, limiter = null, meter = null;
 const eqFlat = () => eqGains.every((g) => !g);
 
 // build the filter chain on first use
@@ -574,8 +574,15 @@ function eqGraph() {
       n.type = b.type; n.frequency.value = b.f; n.Q.value = 1;
       return n;
     });
-    [src, eqPre, ...eqNodes].reduce((a, b) => (a.connect(b), b)).connect(eqCtx.destination);
-    applyGains();
+    // auto volume: per-song gain, then a limiter so boosted songs don't clip
+    normGain = eqCtx.createGain();
+    limiter = eqCtx.createDynamicsCompressor();
+    limiter.knee.value = 0; limiter.attack.value = 0.003; limiter.release.value = 0.25;
+    [src, eqPre, ...eqNodes, normGain, limiter].reduce((a, b) => (a.connect(b), b)).connect(eqCtx.destination);
+    // side branch that measures the raw level for the live estimate
+    meter = eqCtx.createAnalyser(); meter.fftSize = 8192;
+    src.connect(meter);
+    applyGains(); applyNorm(true);
     return true;
   } catch { eqCtx = null; return false; }
 }
@@ -589,7 +596,7 @@ function applyGains() {
 }
 // make sure the context runs before (or while) audio plays
 function eqWake() {
-  if (!eqCtx && !eqFlat()) eqGraph();
+  if (!eqCtx && (!eqFlat() || norm)) eqGraph();
   if (eqCtx?.state === "suspended") eqCtx.resume().catch(() => {});
 }
 function setEq(g) {
@@ -623,6 +630,101 @@ function paintEq() {
   $(".tool.eq").classList.toggle("off", isYT);
 }
 paintEq();
+
+// ------------------------------------------------------------------ auto volume (drive audio only, off by default)
+// evens out loud and quiet songs. each song is measured once from its offline copy and gets its own gain;
+// until then a live meter estimates the level while it plays.
+const NORM_TARGET = -16; // average level (dB rms) every song is moved to
+const NORM_MIN = -12, NORM_MAX = 9;
+let norm = store.get("lp-norm", false);
+const loud = store.get("lp-loud", {}); // drive id -> measured level in dB
+const measuring = new Set();
+let live = [];
+const mbuf = new Float32Array(8192);
+
+// loudness of a list of mean-square blocks, gated like lufs (no k-weighting)
+function gatedDb(ms) {
+  let g = ms.filter((x) => x > 1e-7);
+  if (!g.length) return null;
+  const rel = g.reduce((a, b) => a + b) / g.length / 10;
+  g = g.filter((x) => x > rel);
+  return 10 * Math.log10(g.reduce((a, b) => a + b) / g.length);
+}
+// 400 ms blocks over the whole decoded song
+function levelOf(b) {
+  const block = Math.round(b.sampleRate * 0.4), ch = Array.from({ length: b.numberOfChannels }, (_, i) => b.getChannelData(i));
+  const ms = [];
+  for (let s = 0; s + block <= b.length; s += block) {
+    let sum = 0;
+    for (const c of ch) for (let i = s; i < s + block; i++) sum += c[i] * c[i];
+    ms.push(sum / (block * ch.length));
+  }
+  return gatedDb(ms);
+}
+// decode the offline copy at a low sample rate (enough for level, light on memory) and store its level
+async function measure(id) {
+  if (id in loud || measuring.has(id) || !hasCache) return;
+  measuring.add(id);
+  try {
+    const r = await (await caches.open(AUDIO_CACHE)).match(driveKey(id));
+    if (!r) return;
+    const data = await new OfflineAudioContext(1, 1, 11025).decodeAudioData(await r.arrayBuffer());
+    const db = levelOf(data);
+    if (db == null) return;
+    loud[id] = Math.round(db * 10) / 10;
+    store.set("lp-loud", loud);
+    if (cur?.id === id) applyNorm(true);
+  } catch {} finally { measuring.delete(id); }
+}
+// gain for the current song: measured level first, live estimate otherwise
+function normDb() {
+  if (!norm || !cur || cur.type === "yt") return null;
+  const L = cur.id in loud ? loud[cur.id] : live.length >= 12 ? gatedDb(live) : null;
+  return L == null ? null : Math.max(NORM_MIN, Math.min(NORM_MAX, NORM_TARGET - L));
+}
+// push the gain and limiter settings into the graph; jumps fast on a new song, glides on live updates
+function applyNorm(fast) {
+  const d = normDb();
+  if (normGain) {
+    const t = eqCtx.currentTime;
+    normGain.gain.setTargetAtTime(Math.pow(10, (d || 0) / 20), t, fast ? 0.05 : 1.5);
+    limiter.threshold.value = norm ? -1 : 0;
+    limiter.ratio.value = norm ? 20 : 1;
+  }
+  paintNorm(d);
+}
+// sample the raw level a few times a second while an unmeasured song plays
+setInterval(() => {
+  if (!norm || !meter || !cur || cur.type === "yt" || cur.id in loud || audio.paused) return;
+  meter.getFloatTimeDomainData(mbuf);
+  let sum = 0;
+  for (const x of mbuf) sum += x * x;
+  // the element volume is applied before the meter, undo it
+  const v = audio.volume;
+  if (v > 0.01) live.push(sum / mbuf.length / (v * v));
+  if (live.length >= 12) applyNorm(false);
+}, 250);
+// called on every song change
+function normTrack() {
+  live = [];
+  if (norm && cur?.type === "drive" && cached.has(cur.id)) measure(cur.id);
+  applyNorm(true);
+}
+function paintNorm(d = normDb()) {
+  const b = $("#normBtn");
+  b.classList.toggle("on", norm);
+  b.setAttribute("aria-pressed", String(norm));
+  $("#normVal").textContent = !norm ? "" : cur?.type === "yt" ? "tidak untuk YouTube"
+    : d == null ? "mengukur…" : (d > 0 ? "+" : d < 0 ? "−" : "") + Math.abs(d).toFixed(1) + " dB";
+}
+$("#normBtn").onclick = () => {
+  norm = !norm;
+  store.set("lp-norm", norm);
+  if (norm) { eqWake(); prepareAround(); }
+  normTrack();
+  toast(norm ? "Ratakan volume aktif" : "Ratakan volume mati", { ms: 1500 });
+};
+paintNorm();
 
 // ------------------------------------------------------------------ a-b loop (buttons + draggable handles on the seek bar)
 function updateAB() {
@@ -785,6 +887,9 @@ async function prefetchAll() {
 async function pruneCache() {
   if (!hasCache) return;
   const keep = new Set(list.filter((x) => x.type === "drive").map((x) => x.id));
+  // forget levels of songs that left the playlist
+  Object.keys(loud).forEach((id) => { if (!keep.has(id)) delete loud[id]; });
+  store.set("lp-loud", loud);
   try {
     const c = await caches.open(AUDIO_CACHE);
     for (const r of await c.keys()) {
@@ -801,6 +906,8 @@ async function prepareAround() {
   const want = new Set([idx, (idx + 1) % n, (idx - 1 + n) % n].map((i) => list[i]).filter((x) => x?.type === "drive").map((x) => x.id));
   for (const [id, u] of blobURLs) if (!want.has(id) && audio.src !== u) { URL.revokeObjectURL(u); blobURLs.delete(id); }
   for (const id of want) if (cached.has(id) && !blobURLs.has(id)) { const u = await cachedURL(id); if (u) blobURLs.set(id, u); }
+  // measure the current and neighbouring songs so their gain is ready when they start
+  if (norm) for (const id of want) if (cached.has(id)) await measure(id);
 }
 
 // ------------------------------------------------------------------ lock-screen & headphone controls

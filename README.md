@@ -18,6 +18,7 @@ Playlist, Perfect Pitch, dan Tuner jalan langsung di browser (web maupun Encore 
 - Ulang: tanpa ulang, ulang 1 lagu, ulang semua · acak
 - Kecepatan 0.25×–2×, loop A–B (penanda A/B bisa digeser di progress bar)
 - Equalizer 5-band (80 Hz–12 kHz, ±12 dB) dengan preset Flat, Bass +, Tanpa bass, dan Vokal. Khusus lagu Google Drive; audio YouTube tidak bisa diolah browser
+- Ratakan volume (opsional, mati secara default): lagu yang terlalu kencang diturunkan, yang terlalu pelan dinaikkan (maks −12/+9 dB, dengan limiter agar tidak pecah). Tiap lagu diukur sekali dari salinan offline-nya; sebelum itu level diperkirakan sambil diputar. Khusus lagu Google Drive
 - Bisa dipasang di layar HP (Add to Home Screen), dengan kontrol di layar kunci untuk audio Drive
 - Audio Drive otomatis disimpan di perangkat: hemat kuota saat diputar ulang dan bisa offline
 - Playlist versi online dan Encore App bisa disamakan (di browser yang sama): klik **Sambungkan playlist** di halaman Breakdown versi online. App di komputer menyimpan salinan bersama (`/api/sync`), perubahan terbaru yang menang. Chrome/Edge meminta izin akses jaringan lokal sekali; Safari belum dites
