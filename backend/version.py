@@ -1,4 +1,4 @@
 # encore app version: the release tag is app-v<APP_VERSION>, and the app downloads the ai engine
 # from that same release so both always match (the release workflow checks the tag)
-APP_VERSION = "1.1.3"
+APP_VERSION = "1.1.4"
 RELEASES = "https://github.com/willy-docksha/encore-player/releases"
