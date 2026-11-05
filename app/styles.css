@@ -323,8 +323,9 @@ select { background: var(--surface-2); border: 1px solid var(--line); border-rad
 .queue-head { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 10px; }
 .queue { list-style: none; margin: 0; padding: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
 .q-item {
-  display: grid; grid-template-columns: 18px 26px minmax(0, 1fr) auto; align-items: center; gap: 6px;
-  padding: 8px 6px; border-radius: 10px; cursor: pointer; transition: background .12s;
+  /* number column doubles as the drag grip on hover, actions only take space on hover */
+  position: relative; display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: 6px;
+  padding: 8px 8px 8px 2px; border-radius: 10px; cursor: pointer; transition: background .12s;
 }
 .q-item:hover { background: var(--surface-2); }
 .q-item.cur { background: var(--accent-soft); }
@@ -332,9 +333,10 @@ select { background: var(--surface-2); border: 1px solid var(--line); border-rad
 .q-item.dragging { opacity: .4; }
 .q-item.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
 .q-item.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
-.q-grip { color: var(--muted); opacity: 0; cursor: grab; display: grid; place-items: center; touch-action: none; }
+.q-grip { position: absolute; left: 2px; top: 0; bottom: 0; width: 26px; color: var(--muted); opacity: 0; cursor: grab; display: grid; place-items: center; touch-action: none; }
 .q-grip svg { width: 16px; height: 16px; }
 .q-item:hover .q-grip { opacity: .7; }
+.q-item:hover .q-num { opacity: 0; }
 .q-num { font: .78rem var(--f-mono); color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; }
 .q-item.cur .q-num { color: var(--accent); }
 .q-num .nav-eq i { width: 2.5px; }
@@ -345,8 +347,8 @@ select { background: var(--surface-2); border: 1px solid var(--line); border-rad
 .q-note { color: var(--loop); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .q-dl { flex: none; }
 .q-dl.ok { color: var(--ok); }
-.q-acts { display: flex; opacity: 0; transition: opacity .12s; }
-.q-item:hover .q-acts, .q-item:focus-within .q-acts { opacity: 1; }
+.q-acts { display: none; }
+.q-item:hover .q-acts, .q-item:focus-within .q-acts { display: flex; }
 .q-acts .icon-btn { width: 32px; height: 32px; }
 .q-acts .icon-btn svg { width: 17px; height: 17px; }
 .q-acts .icon-btn.bass { color: var(--bass); }
@@ -684,8 +686,11 @@ div.sheet:not([hidden]) { flex: 1; min-height: 300px; display: flex; flex-direct
   .transport { gap: 0; }
   .icon-btn { width: 38px; height: 38px; }
   .play-btn { width: 58px; height: 58px; }
-  .q-acts { opacity: 1; }
-  .q-grip { opacity: .5; }
+  /* touch: keep grip, number and actions in their own columns */
+  .q-item { grid-template-columns: 18px 26px minmax(0, 1fr) auto; padding: 8px 6px; }
+  .q-grip { position: static; width: auto; opacity: .5; }
+  .q-item:hover .q-num { opacity: 1; }
+  .q-acts { display: flex; }
   .add-bar { flex-wrap: wrap; }
   .add-input { flex-basis: 100%; }
   .add-bar .btn { flex: 1; }

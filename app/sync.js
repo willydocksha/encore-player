@@ -2,9 +2,9 @@
 // the browser keeps the two addresses apart, so the app on this computer holds the shared copy
 // (/api/sync) and both pages sync with it. the online site only does this after "Sambungkan".
 
-import { store, SYNC_KEYS } from "./core.js";
+import { store, SYNC_KEYS, toast } from "./core.js";
 
-const ONLINE = "https://encore-player.vercel.app";
+const ONLINE = "http://localhost:8781";
 const APP = "http://localhost:8765";
 const onlineSite = location.origin === ONLINE;
 const listeners = new Set();
@@ -40,9 +40,11 @@ async function syncNow(timeout = 4000) {
     shared = await r.json();
   } catch {
     connected = false;
+    paintChip();
     return [];
   }
   connected = true;
+  paintChip();
   const t = times();
   const changed = [];
   for (const [k, item] of Object.entries(shared)) {
@@ -68,6 +70,31 @@ export async function connect() {
   if (connected) dispatchEvent(new Event("encore-connected")); // e.g. playlist shares its audio now
   return connected;
 }
+
+// online playlist page: shows whether it shares with the encore app, and connects on click.
+// phones and tablets have no encore app, so they don't get it
+function paintChip() {
+  const b = document.getElementById("syncChip");
+  if (!b) return;
+  b.hidden = !onlineSite || matchMedia("(pointer: coarse)").matches;
+  if (b.hidden || b.dataset.busy) return;
+  b.classList.toggle("ghost", connected);
+  b.textContent = connected ? "✓ Sama dengan Encore App" : "Sambungkan ke Encore App";
+  b.title = connected ? "Playlist dan audio di sini dibagi dengan Encore App di komputer ini"
+    : "Samakan playlist dan audio dengan Encore App di komputer ini (app harus sedang jalan)";
+  b.onclick = connected ? null : async () => {
+    b.dataset.busy = "1";
+    b.disabled = true;
+    b.textContent = "Menyambungkan…";
+    const ok = await connect();
+    delete b.dataset.busy;
+    b.disabled = false;
+    paintChip();
+    toast(ok ? "Tersambung! Playlist dan audio di sini sekarang sama dengan Encore App."
+      : "Encore App belum terdeteksi. Pastikan app-nya jalan, lalu klik Izinkan kalau browser bertanya soal jaringan lokal.", { error: !ok, ms: 8000 });
+  };
+}
+paintChip();
 
 // push local changes soon after they happen, pull the other page's changes now and then
 let pushTimer = null;
