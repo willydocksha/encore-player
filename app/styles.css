@@ -290,6 +290,9 @@ select { background: var(--surface-2); border: 1px solid var(--line); border-rad
 .times { display: flex; justify-content: space-between; font: .8rem var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
 
 .transport { display: flex; align-items: center; justify-content: center; gap: clamp(2px, 1.4vw, 14px); margin-top: 6px; }
+/* narrow player: play button keeps its circle, side buttons shrink but stay round */
+.transport .play-btn { flex: none; }
+.transport .icon-btn { flex: 0 1 auto; min-width: 28px; height: auto; aspect-ratio: 1; }
 .transport-sub { display: flex; justify-content: center; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
 
 .tools { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
