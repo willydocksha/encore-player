@@ -2,7 +2,7 @@
 
 import { $, $$, el, icon, setIcon, store, fmtTime, parseLink, toast, confirmDialog, showMenu, server, media, onKeys } from "./core.js";
 // waits for the first sync, so the state below already includes what the other page saved
-import { onRemote } from "./sync.js";
+import { onRemote, appBase } from "./sync.js";
 
 const audio = $("#audio");
 let list = store.get("lp-playlist", []); // [{url,type,id,start,title,note,bad}]
@@ -394,6 +394,8 @@ export function playIndex(i, autoplay = true) {
     const net = driveKey(it.id), ready = blobURLs.get(it.id);
     if (ready) setSrc(ready, true);
     else if (cached.has(it.id)) cachedURL(it.id).then((u) => { if (u) blobURLs.set(it.id, u); setSrc(u || net, !!u); });
+    // the encore app has it: copy it over first (local, quick) instead of streaming from drive
+    else if (onApp.has(it.id)) cacheDrive(it.id).then(async (ok) => { const u = ok ? await cachedURL(it.id) : null; if (u) blobURLs.set(it.id, u); setSrc(u || net, !!u); });
     else setSrc(net, false);
   }
   prepareAround(); paintEq(); normTrack();
@@ -850,10 +852,44 @@ async function cachedURL(id) {
   try { const r = await (await caches.open(AUDIO_CACHE)).match(driveKey(id)); if (r) return URL.createObjectURL(await r.blob()); } catch {}
   return null;
 }
-async function cacheDrive(id) {
-  if (cached.has(id)) return true;
+// songs the encore app on this computer already holds: taken from there instead of drive
+const onApp = new Set();
+const appURL = (id) => appBase() + "/api/audio/" + encodeURIComponent(id);
+async function loadAppIds(timeout = 3000) {
+  if (appBase() == null) return;
   try {
-    const r = await fetch(driveKey(id));
+    const r = await fetch(appBase() + "/api/audio", { signal: AbortSignal.timeout(timeout) });
+    if (r.ok) (await r.json()).forEach((id) => onApp.add(id));
+  } catch {}
+}
+// hand a copy to the app so the other page doesn't download it again
+async function giveToApp(id, blob) {
+  if (appBase() == null || onApp.has(id)) return;
+  try {
+    const r = await fetch(appURL(id), { method: "PUT", headers: { "content-type": blob.type || "application/octet-stream" }, body: blob });
+    if (r.ok) onApp.add(id);
+  } catch {}
+}
+// songs cached here before the app had them: pass them over one by one in the background
+async function shareCached() {
+  if (appBase() == null || !hasCache) return;
+  for (const id of [...cached]) {
+    if (onApp.has(id)) continue;
+    try { const r = await (await caches.open(AUDIO_CACHE)).match(driveKey(id)); if (r) await giveToApp(id, await r.blob()); } catch {}
+  }
+}
+// one download per song, even when the player and the background fetch ask at the same time
+const inFlight = new Map();
+function cacheDrive(id) {
+  if (cached.has(id)) return Promise.resolve(true);
+  if (!inFlight.has(id)) inFlight.set(id, downloadDrive(id).finally(() => inFlight.delete(id)));
+  return inFlight.get(id);
+}
+async function downloadDrive(id) {
+  const fromApp = onApp.has(id);
+  try {
+    let r = fromApp ? await fetch(appURL(id)).catch(() => null) : null;
+    if (!r?.ok) r = await fetch(driveKey(id));
     const type = r.headers.get("content-type") || "";
     if (!r.ok || !/^(audio|video)\/|octet-stream/.test(type)) return false;
     const total = +r.headers.get("content-length") || 0, reader = r.body.getReader(), chunks = [];
@@ -868,6 +904,7 @@ async function cacheDrive(id) {
     const blob = new Blob(chunks, { type });
     await (await caches.open(AUDIO_CACHE)).put(driveKey(id), new Response(blob, { headers: { "Content-Type": type, "Content-Length": String(blob.size) } }));
     cached.add(id);
+    giveToApp(id, blob);
     return true;
   } catch { return false; }
   finally { progress.delete(id); repaintDl(id); }
@@ -876,12 +913,14 @@ async function prefetchAll() {
   if (!hasCache || prefetching || navigator.connection?.saveData) return;
   prefetching = true;
   try {
+    await loadAppIds(); // see what the app already holds before asking drive
     for (;;) {
       const start = Math.max(idx, 0), order = [...list.slice(start), ...list.slice(0, start)];
       const it = order.find((x) => x.type === "drive" && !cached.has(x.id) && !failed.has(x.id));
       if (!it) break;
       if (await cacheDrive(it.id)) { prepareAround(); renderQueue(); } else failed.add(it.id);
     }
+    await shareCached();
   } finally { prefetching = false; }
 }
 async function pruneCache() {
@@ -956,9 +995,12 @@ export async function initPlaylist() {
   paintModes(); applyRate(rate); setName(store.get("lp-name", null)); renderQueue();
   list.forEach(fetchTitle);
   await loadCachedIds();
+  await loadAppIds(1500); // so the first song can come from the app
   if (list.length) { idx = Math.min(Math.max(idx, 0), list.length - 1); await prepareAround(); playIndex(idx, false); }
   else showEmptyPlayer();
   renderQueue(); pruneCache(); prefetchAll();
   try { navigator.storage?.persist?.(); } catch {}
   server.onChange(() => renderQueue());
+  // just connected to the encore app: take its songs and give it the ones cached here
+  addEventListener("encore-connected", () => prefetchAll());
 }

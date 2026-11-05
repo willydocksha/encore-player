@@ -57,12 +57,15 @@ async function syncNow(timeout = 4000) {
 }
 
 export const onRemote = (fn) => listeners.add(fn);
+// base url of the encore app for shared data, or null when this page doesn't share with it
+export const appBase = () => (enabled() ? (onlineSite ? APP : "") : null);
 export const isConnected = () => connected;
 
 // online site: turn sync on (button on the breakdown page); resolves whether the app answered
 export async function connect() {
   store.set("sync-app", true);
   await syncNow(30000); // the first call waits for chrome's permission prompt
+  if (connected) dispatchEvent(new Event("encore-connected")); // e.g. playlist shares its audio now
   return connected;
 }
 

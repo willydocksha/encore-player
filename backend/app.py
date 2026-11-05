@@ -87,7 +87,7 @@ async def no_cache_frontend(request, call_next):
 # the online site may reach this app to share its playlist (sync below); chrome asks the user once
 # for "local network" access, which needs the private network header on the preflight
 ONLINE = "https://encore-player.vercel.app"
-app.add_middleware(CORSMiddleware, allow_origins=[ONLINE], allow_methods=["GET", "POST"],
+app.add_middleware(CORSMiddleware, allow_origins=[ONLINE], allow_methods=["GET", "POST", "PUT"],
                    allow_headers=["content-type"], allow_private_network=True)
 
 download_pool = ThreadPoolExecutor(max_workers=2)
@@ -506,6 +506,67 @@ async def post_sync(request: Request):
             tmp.write_text(json.dumps(stored))
             os.replace(tmp, SYNC)
         return stored
+
+
+# ---------------------------------------------------------------- shared audio (online site <-> this app)
+# offline copies of drive songs live on disk here, so a song downloaded on one page is not
+# downloaded again on the other. pages check here first and hand over what they fetched themselves.
+
+AUDIO = data_dir() / "audio"
+# old shares carry their resource key after a dot: "<id>.<key>"
+DRIVE_ID = re.compile(r"^[A-Za-z0-9_-]{10,200}(\.[A-Za-z0-9_-]{1,100})?$")
+
+
+def audio_file(drive_id: str) -> Path:
+    # drive ids only: nothing else may become a path
+    if not DRIVE_ID.match(drive_id) or drive_id.endswith(".type"):
+        raise HTTPException(400, "id drive tidak valid")
+    return AUDIO / drive_id
+
+
+def type_file(f: Path) -> Path:
+    # media type of a stored song sits next to it
+    return f.with_name(f.name + ".type")
+
+
+@app.get("/api/audio")
+def audio_list():
+    # ids of the songs stored here (without the type sidecars and half-written uploads)
+    if not AUDIO.exists():
+        return []
+    return sorted(f.name for f in AUDIO.iterdir() if DRIVE_ID.match(f.name) and not f.name.endswith(".type"))
+
+
+@app.get("/api/audio/{drive_id}")
+def audio_get(drive_id: str):
+    f = audio_file(drive_id)
+    if not f.exists():
+        raise HTTPException(404, "belum tersimpan")
+    kind = type_file(f)
+    media = kind.read_text().strip() if kind.exists() else "application/octet-stream"
+    return FileResponse(f, media_type=media)
+
+
+@app.put("/api/audio/{drive_id}")
+async def audio_put(drive_id: str, request: Request):
+    f = audio_file(drive_id)
+    media = request.headers.get("content-type", "")
+    if not re.match(r"^(audio|video)/|application/octet-stream", media):
+        raise HTTPException(400, "bukan file audio")
+    # write to a temp file first so a broken upload never looks like a stored song
+    AUDIO.mkdir(parents=True, exist_ok=True)
+    tmp = AUDIO / f".{drive_id}.{uuid.uuid4().hex}.part"
+    try:
+        with tmp.open("wb") as out:
+            async for chunk in request.stream():
+                out.write(chunk)
+        if tmp.stat().st_size < 1024:
+            raise HTTPException(400, "file audio kosong")
+        type_file(f).write_text(media)
+        os.replace(tmp, f)
+    finally:
+        tmp.unlink(missing_ok=True)
+    return {"ok": True}
 
 
 @app.post("/api/ai/install")
