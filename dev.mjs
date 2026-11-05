@@ -1,6 +1,6 @@
 // web version dev server: static files plus the vercel functions in api/ (same routes as vercel.json).
 // breakdown shows the download page here; the encore app itself runs with backend/main.py.
-// usage: node dev.mjs [port]
+// usage: node dev.mjs [port] (default 8780; 8765 belongs to the encore app, the online site syncs with it)
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
@@ -8,7 +8,7 @@ import { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
-const PORT = Number(process.argv[2] || process.env.PORT || 8765);
+const PORT = Number(process.argv[2] || process.env.PORT || 8780);
 const TYPES = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css",
   ".json": "application/json", ".png": "image/png", ".svg": "image/svg+xml", ".webmanifest": "application/manifest+json",
@@ -42,7 +42,7 @@ http.createServer(async (req, res) => {
   }
 }).on("error", (err) => {
   // usually a second copy: the first one keeps serving the same files
-  if (err.code === "EADDRINUSE") console.log(`Encore sudah jalan di http://localhost:${PORT} (atau pakai port lain: node dev.mjs 8766)`);
+  if (err.code === "EADDRINUSE") console.log(`Encore sudah jalan di http://localhost:${PORT} (atau pakai port lain: node dev.mjs 8781)`);
   else console.error(err);
   process.exit(err.code === "EADDRINUSE" ? 0 : 1);
 }).listen(PORT, () => console.log(`Encore di http://localhost:${PORT}`));

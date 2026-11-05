@@ -114,7 +114,7 @@ git tag app-v1.1.0 && git push origin app-v1.1.0
 node dev.mjs
 ```
 
-Lalu buka http://localhost:8765. `dev.mjs` menyajikan versi web plus fungsi `api/` (Drive & judul) sama seperti di Vercel. Breakdown di sini menampilkan halaman download app (jalankan Encore App di port lain kalau perlu keduanya: `PORT=8766 .venv/bin/python backend/main.py`).
+Lalu buka http://localhost:8780. `dev.mjs` menyajikan versi web plus fungsi `api/` (Drive & judul) sama seperti di Vercel. Breakdown di sini menampilkan halaman download app. Port 8765 sengaja dibiarkan untuk Encore App, karena versi online menyinkronkan playlist ke sana.
 
 ## Deploy ke Vercel
 
