@@ -105,11 +105,6 @@
           <p class="eyebrow">Playlist latihan</p>
           <h1 id="plName">Playlist</h1>
         </div>
-        <div class="head-actions">
-          <button class="btn sm" type="button" id="syncChip" hidden></button>
-          <span class="count" id="count"></span>
-          <button class="btn primary" type="button" id="openEditor"><svg><use href="#i-plus"/></svg>Tambah lagu</button>
-        </div>
       </header>
 
       <div class="pl-grid">
@@ -199,8 +194,11 @@
 
         <aside class="card queue-card">
           <div class="queue-head">
-            <h3>Antrian lagu</h3>
-            <span class="tool-hint" id="offlineHint" hidden><svg><use href="#i-check"/></svg>tersimpan offline</span>
+            <div class="queue-title">
+              <h3>Antrian lagu<span class="offline-ok" id="offlineHint" title="Audio Drive tersimpan offline" hidden><svg><use href="#i-check"/></svg></span></h3>
+              <p class="queue-sub"><span class="count" id="count"></span><button class="link-btn" type="button" id="syncChip" hidden></button></p>
+            </div>
+            <button class="btn primary sm" type="button" id="openEditor"><svg><use href="#i-plus"/></svg>Tambah lagu</button>
           </div>
           <ol class="queue" id="queue"></ol>
           <div class="empty" id="qEmpty">

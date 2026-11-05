@@ -24,7 +24,8 @@ function paint(st) {
   const busy = st.state === "installing" || st.state === "unpacking";
   $("#aiProgress").hidden = !busy;
   $("#aiInstall").disabled = busy;
-  $("#aiLater").textContent = busy ? "Tutup (download tetap jalan)" : "Nanti saja";
+  // short label so both buttons fit; the hint lives in the progress text
+  $("#aiLater").textContent = busy ? "Tutup" : "Nanti saja";
   $("#aiError").hidden = !st.error;
   $("#aiError").textContent = st.error || "";
   if (st.state === "unpacking") {
@@ -33,7 +34,7 @@ function paint(st) {
   } else if (busy) {
     const p = st.total ? st.got / st.total : 0;
     $("#aiBar").style.width = `${Math.round(p * 100)}%`;
-    $("#aiProgressText").textContent = st.total ? `Mengunduh ${mb(st.got)} dari ${mb(st.total)}` : "Menghubungi server…";
+    $("#aiProgressText").textContent = st.total ? `Mengunduh ${mb(st.got)} dari ${mb(st.total)}. Boleh ditutup, download tetap jalan.` : "Menghubungi server…";
   }
 }
 

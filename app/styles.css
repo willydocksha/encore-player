@@ -323,7 +323,17 @@ select { background: var(--surface-2); border: 1px solid var(--line); border-rad
 .eq.off .eq-bands { opacity: .45; }
 
 .queue-card { padding: 16px 10px 10px; position: sticky; top: 20px; max-height: calc(100vh - 40px); display: flex; flex-direction: column; }
-.queue-head { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 10px; }
+.queue-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 8px 12px; }
+.queue-title { min-width: 0; }
+.queue-title h3 { display: flex; align-items: center; gap: 6px; }
+/* green check next to the title, the text lives in its tooltip */
+.offline-ok { display: inline-grid; place-items: center; color: var(--ok); }
+.offline-ok svg { width: 15px; height: 15px; }
+.offline-ok[hidden] { display: none; }
+.queue-sub { margin: 2px 0 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.link-btn { border: 0; background: none; padding: 0; font: .76rem var(--f-body); color: var(--accent); cursor: pointer; }
+.link-btn.ghost { color: var(--ok); cursor: default; }
+.queue-head #openEditor { flex: none; }
 .queue { list-style: none; margin: 0; padding: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
 .q-item {
   /* number column doubles as the drag grip on hover, actions only take space on hover */
@@ -369,7 +379,7 @@ dialog[open] { animation: pop .18s ease; }
 .sheet-head { display: flex; align-items: center; justify-content: space-between; }
 .sheet-head h2, .sheet-inner > h2 { font-size: 1.2rem; }
 .sheet-inner > p { margin: 0; color: var(--ink-2); }
-.sheet-foot { display: flex; justify-content: flex-end; gap: 10px; }
+.sheet-foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
 textarea {
   width: 100%; min-height: 150px; resize: vertical; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line);
   background: var(--surface-2); font: .85rem/1.55 var(--f-mono);
@@ -677,8 +687,7 @@ div.sheet:not([hidden]) { flex: 1; min-height: 300px; display: flex; flex-direct
   .main { padding-left: 14px; padding-right: 14px; padding-top: calc(18px + env(safe-area-inset-top, 0px)); }
   .page-head { margin-bottom: 14px; gap: 10px; }
   /* count on the left, compact add button on the right */
-  #view-playlist .head-actions { width: 100%; justify-content: space-between; }
-  #openEditor { min-height: 34px; padding: 6px 12px; font-size: .85rem; box-shadow: none; }
+  #openEditor { min-height: 34px; padding: 6px 12px; font-size: .85rem; }
   #openEditor svg { width: 16px; height: 16px; }
   .player { padding: 12px; }
   /* long titles: wrap to two lines instead of a short ellipsis */
