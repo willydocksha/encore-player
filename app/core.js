@@ -267,3 +267,15 @@ document.addEventListener("keydown", (e) => {
   if (t.matches?.("textarea, input:not([type=range]), select")) return;
   keyHandlers.get(router.current)?.(e);
 });
+
+// space is play/pause everywhere: stop it from also pressing whatever button still has focus
+// (safari fires the button's click on keyup, so a focused "shortcut" button kept reopening its dialog)
+document.addEventListener("keyup", (e) => {
+  if (e.key !== " " || document.querySelector("dialog[open]")) return;
+  if (e.target.closest?.("button, summary, [role=button]")) e.preventDefault();
+});
+
+// a closed dialog hands focus back to the button that opened it; drop it so later keys don't re-press it
+document.addEventListener("close", (e) => {
+  if (e.target.tagName === "DIALOG") setTimeout(() => document.activeElement?.closest?.("button")?.blur(), 0);
+}, true);
