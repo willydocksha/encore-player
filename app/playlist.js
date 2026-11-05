@@ -328,6 +328,7 @@ const P = {
   play() {
     if (!cur) { if (list.length) playIndex(Math.max(idx, 0), true); return; }
     media.claim("playlist");
+    if (cur.type !== "yt") eqWake();
     cur.type === "yt" ? ytReady && yt.playVideo() : audio.play().catch(() => {});
   },
   pause() { cur?.type === "yt" ? ytReady && yt.pauseVideo() : audio.pause(); },
@@ -388,14 +389,14 @@ export function playIndex(i, autoplay = true) {
       audio.preservesPitch = true;
       audio.playbackRate = rate; audio.defaultPlaybackRate = rate;
       audio.volume = vol() / 100;
-      if (autoplay) audio.play().catch(() => {});
+      if (autoplay) { eqWake(); audio.play().catch(() => {}); }
     };
     const net = driveKey(it.id), ready = blobURLs.get(it.id);
     if (ready) setSrc(ready, true);
     else if (cached.has(it.id)) cachedURL(it.id).then((u) => { if (u) blobURLs.set(it.id, u); setSrc(u || net, !!u); });
     else setSrc(net, false);
   }
-  prepareAround();
+  prepareAround(); paintEq();
   renderQueue(); render(); updateMediaSession();
   $("#queue .q-item.cur")?.scrollIntoView({ block: "nearest" });
 }
@@ -447,7 +448,7 @@ function markBad(text) {
   if (autonext && list.length > 1) setTimeout(() => nextTrack(true), 2500);
 }
 audio.onerror = () => { if (audio.getAttribute("src")) markBad('Audio Drive tidak bisa diputar. Pastikan file dibagikan "Siapa saja yang memiliki link" dan berupa audio, lalu salin ulang link-nya dari tombol Bagikan.'); };
-audio.onplaying = () => { if (cur) cur.bad = false; media.claim("playlist"); renderQueue(); };
+audio.onplaying = () => { eqWake(); if (cur) cur.bad = false; media.claim("playlist"); renderQueue(); };
 audio.onpause = renderQueue;
 audio.onended = onEnded;
 
@@ -540,6 +541,88 @@ function nudgeVol(d) {
   store.set("lp-vol", v);
   setMuted(false);
 }
+
+// ------------------------------------------------------------------ equalizer (drive audio only)
+// the <audio> element is routed through web audio filters. youtube plays inside its own iframe, so it can't be touched.
+// the graph is only built once the eq leaves flat: a routed element goes silent while its context is suspended.
+const EQ_BANDS = [
+  { f: 80, type: "lowshelf", label: "80" },
+  { f: 250, type: "peaking", label: "250" },
+  { f: 1000, type: "peaking", label: "1k" },
+  { f: 4000, type: "peaking", label: "4k" },
+  { f: 12000, type: "highshelf", label: "12k" },
+];
+const EQ_PRESETS = {
+  flat: { name: "Flat", g: [0, 0, 0, 0, 0] },
+  bassUp: { name: "Bass +", g: [6, 3, 0, 0, 0] },
+  bassCut: { name: "Tanpa bass", g: [-12, -8, 0, 0, 0] },
+  vocal: { name: "Vokal", g: [-3, -1, 3, 4, 1] },
+};
+let eqGains = store.get("lp-eq", EQ_PRESETS.flat.g);
+let eqCtx = null, eqNodes = null, eqPre = null;
+const eqFlat = () => eqGains.every((g) => !g);
+
+// build the filter chain on first use
+function eqGraph() {
+  if (eqCtx) return true;
+  try {
+    eqCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = eqCtx.createMediaElementSource(audio);
+    eqPre = eqCtx.createGain();
+    eqNodes = EQ_BANDS.map((b) => {
+      const n = eqCtx.createBiquadFilter();
+      n.type = b.type; n.frequency.value = b.f; n.Q.value = 1;
+      return n;
+    });
+    [src, eqPre, ...eqNodes].reduce((a, b) => (a.connect(b), b)).connect(eqCtx.destination);
+    applyGains();
+    return true;
+  } catch { eqCtx = null; return false; }
+}
+// push the current gains into the filters
+function applyGains() {
+  const t = eqCtx.currentTime;
+  eqNodes.forEach((n, i) => n.gain.setTargetAtTime(eqGains[i], t, 0.03));
+  // pull the level down on boosts so they don't clip
+  const boost = Math.max(0, ...eqGains);
+  eqPre.gain.setTargetAtTime(Math.pow(10, -boost / 2 / 20), t, 0.03);
+}
+// make sure the context runs before (or while) audio plays
+function eqWake() {
+  if (!eqCtx && !eqFlat()) eqGraph();
+  if (eqCtx?.state === "suspended") eqCtx.resume().catch(() => {});
+}
+function setEq(g) {
+  eqGains = g.map((x) => Math.max(-12, Math.min(12, Math.round(x))));
+  store.set("lp-eq", eqGains);
+  if (eqCtx) applyGains();
+  eqWake(); paintEq();
+}
+// band sliders
+const eqInputs = EQ_BANDS.map((b, i) => {
+  const wrap = el("label", "eq-band");
+  const val = el("b");
+  const inp = el("input");
+  inp.type = "range"; inp.min = -12; inp.max = 12; inp.step = 1;
+  inp.setAttribute("aria-label", `EQ ${b.label} Hz`);
+  inp.oninput = () => { const g = [...eqGains]; g[i] = +inp.value; setEq(g); };
+  // double click resets one band
+  inp.ondblclick = () => { const g = [...eqGains]; g[i] = 0; setEq(g); };
+  wrap.append(val, inp, el("span", null, b.label));
+  $("#eqBands").append(wrap);
+  return { inp, val };
+});
+$$("[data-eq]").forEach((b) => (b.onclick = () => setEq(EQ_PRESETS[b.dataset.eq].g)));
+function paintEq() {
+  eqInputs.forEach(({ inp, val }, i) => { inp.value = eqGains[i]; val.textContent = (eqGains[i] > 0 ? "+" : "") + eqGains[i]; });
+  const key = Object.keys(EQ_PRESETS).find((k) => EQ_PRESETS[k].g.every((x, i) => x === eqGains[i]));
+  $("#eqName").textContent = key ? EQ_PRESETS[key].name : "Custom";
+  $$("[data-eq]").forEach((b) => b.classList.toggle("active", b.dataset.eq === key));
+  const isYT = cur?.type === "yt";
+  $("#eqHint").hidden = !isYT;
+  $(".tool.eq").classList.toggle("off", isYT);
+}
+paintEq();
 
 // ------------------------------------------------------------------ a-b loop (buttons + draggable handles on the seek bar)
 function updateAB() {

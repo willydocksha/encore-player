@@ -183,6 +183,15 @@
               <div class="tool-head"><h3>Volume</h3><span class="tool-val" id="volVal">100</span></div>
               <div class="vol"><button class="icon-btn vol-btn" type="button" id="volBtn" title="Mute (M)" aria-pressed="false"><svg><use href="#i-volume"/></svg></button><input id="vol" type="range" min="0" max="100" value="100" aria-label="Volume"></div>
             </div>
+            <div class="card tool eq">
+              <div class="tool-head"><h3>Equalizer</h3><span class="tool-val sm" id="eqName">Flat</span></div>
+              <div class="seg" id="eqPresets">
+                <button type="button" data-eq="flat">Flat</button><button type="button" data-eq="bassUp">Bass +</button>
+                <button type="button" data-eq="bassCut">Tanpa bass</button><button type="button" data-eq="vocal">Vokal</button>
+              </div>
+              <div class="eq-bands" id="eqBands"></div>
+              <p class="tool-hint" id="eqHint" hidden>EQ hanya untuk lagu Google Drive. Audio YouTube tidak bisa diolah browser.</p>
+            </div>
           </section>
         </div>
 
