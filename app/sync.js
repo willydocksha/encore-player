@@ -4,7 +4,7 @@
 
 import { store, SYNC_KEYS, toast } from "./core.js";
 
-const ONLINE = "http://localhost:8781";
+const ONLINE = "https://encore-player.vercel.app";
 const APP = "http://localhost:8765";
 const onlineSite = location.origin === ONLINE;
 const listeners = new Set();
