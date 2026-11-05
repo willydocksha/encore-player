@@ -2,6 +2,7 @@
 // pitch is found with yin on a 2x decimated buffer, low enough for a 5-string bass (low b ~31 hz).
 
 import { $, $$, el, store, media, onKeys, router, toast } from "./core.js";
+import { specFrame, initSpectrum, draw as drawSpec } from "./spectrum.js";
 
 const NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
 const SOLFA = ["do", "di", "re", "ri", "mi", "fa", "fi", "sol", "sel", "la", "li", "si"];
@@ -29,6 +30,10 @@ let recent = []; // last few raw frequencies, the median smooths out single bad 
 let shown = null; // { hz, at }
 let needle = 0;
 let toneUntil = 0;
+let mode = store.get("tuner-mode", "tune"); // "tune" or "spec" (frequency check)
+let micId = store.get("tuner-mic", ""); // chosen input device, "" = browser default
+let raw = null; // reused time domain buffer
+let level = 0; // eased input peak, 0..1
 
 const midiToHz = (m) => a4 * 2 ** ((m - 69) / 12);
 const hzToMidi = (hz) => 69 + 12 * Math.log2(hz / a4);
@@ -86,20 +91,30 @@ async function start() {
     toast("Browser ini tidak bisa memakai mikrofon (butuh HTTPS).", { error: true });
     return;
   }
+  // raw signal: echo cancel / noise suppression bend the pitch and kill the slap highs
+  const audio = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
   try {
-    // raw signal: echo cancel / noise suppression bend the pitch
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-    });
-  } catch {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: micId ? { ...audio, deviceId: { exact: micId } } : audio });
+  } catch (e) {
+    // the saved device is gone (unplugged): fall back to the default one
+    if (micId && (e.name === "OverconstrainedError" || e.name === "NotFoundError")) {
+      micId = "";
+      store.set("tuner-mic", "");
+      toast("Input yang dipilih tidak ditemukan, pakai mikrofon bawaan.");
+      return start();
+    }
     toast("Izin mikrofon ditolak. Izinkan mikrofon di pengaturan browser lalu coba lagi.", { error: true });
     return;
   }
+  // remember what the browser actually opened, labels are readable now
+  micId = stream.getAudioTracks()[0]?.getSettings().deviceId || micId;
+  listMics();
   media.claim("tuner");
   ctx = ctx || new AudioContext();
   await ctx.resume();
   analyser = ctx.createAnalyser();
   analyser.fftSize = 8192;
+  analyser.smoothingTimeConstant = 0.6; // only affects the spectrum view, pitch uses raw samples
   ctx.createMediaStreamSource(stream).connect(analyser);
   recent = [];
   shown = null;
@@ -115,17 +130,57 @@ function stop() {
   analyser?.disconnect();
   analyser = null;
   shown = null;
+  level = 0;
+  paintLevel();
   render();
+}
+
+// switch input while running: close the old stream and open the new device
+async function restart() {
+  if (!stream) return;
+  stop();
+  await start();
+}
+
+// fill the input picker; labels stay empty until the mic permission is granted once
+async function listMics() {
+  const sel = $("#tunerMic");
+  if (!sel || !navigator.mediaDevices?.enumerateDevices) return;
+  const devs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audioinput" && d.deviceId !== "communications");
+  const opts = [el("option", null, "Mikrofon bawaan sistem")];
+  opts[0].value = "";
+  devs.filter((d) => d.deviceId !== "default").forEach((d, i) => {
+    const o = el("option", null, d.label || `Input ${i + 1}`);
+    o.value = d.deviceId;
+    opts.push(o);
+  });
+  sel.replaceChildren(...opts);
+  sel.value = devs.some((d) => d.deviceId === micId && d.deviceId !== "default") ? micId : "";
+}
+
+// input level bar (db scale, -60..0 dbfs)
+function paintLevel() {
+  const bar = $("#tunerLevelBar");
+  if (!bar) return;
+  const db = level > 0 ? 20 * Math.log10(level) : -100;
+  bar.style.width = `${Math.max(0, Math.min(100, ((db + 60) / 60) * 100))}%`;
+  bar.parentElement.classList.toggle("hot", db > -3);
 }
 
 function loop() {
   raf = requestAnimationFrame(loop);
   const now = performance.now();
+  if (!raw || raw.length !== analyser.fftSize) raw = new Float32Array(analyser.fftSize);
+  analyser.getFloatTimeDomainData(raw);
+  // level: newest ~20 ms only, so the bar reacts to the attack
+  let pk = 0, sq = 0;
+  for (let i = raw.length - 1024; i < raw.length; i++) { const v = Math.abs(raw[i]); if (v > pk) pk = v; sq += v * v; }
+  level = pk > level ? pk : level * 0.92;
+  paintLevel();
+  let hz = 0;
   // every other frame is enough and keeps phones cool; skip while our own reference tone plays
   if (tick++ % 2 === 0 && now > toneUntil) {
-    const raw = new Float32Array(analyser.fftSize);
-    analyser.getFloatTimeDomainData(raw);
-    const hz = detect(raw, ctx.sampleRate);
+    hz = detect(raw, ctx.sampleRate);
     if (hz) {
       recent.push(hz);
       if (recent.length > 5) recent.shift();
@@ -136,7 +191,8 @@ function loop() {
       recent = [];
     }
   }
-  paint(now);
+  if (mode === "spec") specFrame(analyser, ctx.sampleRate, Math.sqrt(sq / 1024), hz, now);
+  else paint(now);
 }
 
 // ------------------------------------------------------------------ reference tone
@@ -253,9 +309,23 @@ function render() {
 
   $("#tunerA4").textContent = `A4 = ${a4} Hz`;
   const btn = $("#tunerToggle");
-  btn.lastChild.textContent = stream ? "Berhenti" : "Mulai tuner";
+  btn.lastChild.textContent = stream ? "Matikan mic" : "Nyalakan mic";
   btn.classList.toggle("primary", !stream);
-  paint(performance.now());
+
+  // mode: tuner card vs frequency check card
+  const spec = mode === "spec";
+  $$("#tunerMode button").forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));
+  $("#tunerWrap").classList.toggle("wide", spec);
+  insts.hidden = spec;
+  $(".tuner-card").hidden = spec;
+  $("#specCard").hidden = !spec;
+  if (spec) drawSpec(); else paint(performance.now());
+}
+
+function setMode(m) {
+  mode = m;
+  store.set("tuner-mode", m);
+  render();
 }
 
 function setA4(v) {
@@ -264,10 +334,23 @@ function setA4(v) {
   render();
 }
 
-export function enterTuner() { render(); }
+export function enterTuner() { render(); listMics(); }
 
 export function initTuner() {
   media.register("tuner", stop);
+  initSpectrum((hz) => {
+    if (!(hz > 0)) return null;
+    const m = Math.round(hzToMidi(hz));
+    return { name: `${noteName(m)}${octave(m)}`, midi: m };
+  });
+  $$("#tunerMode button").forEach((b) => (b.onclick = () => setMode(b.dataset.mode)));
+  $("#tunerMic").onchange = (e) => {
+    micId = e.target.value;
+    store.set("tuner-mic", micId);
+    restart();
+  };
+  // plugging in an interface (ampero, ...) shows up right away
+  navigator.mediaDevices?.addEventListener?.("devicechange", listMics);
   $("#tunerToggle").onclick = () => (stream ? stop() : start());
   $("#tunerA4Minus").onclick = () => setA4(a4 - 1);
   $("#tunerA4Plus").onclick = () => setA4(a4 + 1);
@@ -276,6 +359,8 @@ export function initTuner() {
   window.addEventListener("hashchange", () => { if (router.current !== "tuner") stop(); });
   onKeys("tuner", (e) => {
     if (e.code === "Space") { e.preventDefault(); stream ? stop() : start(); return; }
+    if (e.key === "t" || e.key === "T") { setMode(mode === "spec" ? "tune" : "spec"); return; }
+    if (mode === "spec") return;
     const n = +e.key;
     if (n >= 1 && n <= inst.strings.length) $$("#tunerStrings .tuner-string")[inst.strings.length - n].click();
   });

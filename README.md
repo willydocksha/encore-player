@@ -5,7 +5,7 @@ Teman latihan musikmu. Encore punya empat bagian:
 - **Playlist**: media player latihan dari link YouTube dan Google Drive, dengan loop A–B dan kecepatan. Jalan di mana saja, termasuk Vercel dan HP.
 - **Breakdown**: memisahkan instrumen (drum, bass, vokal, gitar, piano, lainnya), menampilkan not bass, melodi vokal, dan chord-nya. Prosesnya berat, jadi Breakdown hanya jalan di **Encore App** (Mac, Windows, Linux) di komputer pengguna. Di versi web, menu Breakdown berisi halaman download app-nya.
 - **Perfect Pitch**: latihan mengenali nada tanpa acuan, level demi level.
-- **Tuner**: stem gitar, bass, ukulele, atau biola lewat mikrofon, sekaligus cek nada apa yang sedang masuk.
+- **Tuner**: stem gitar, bass, ukulele, atau biola lewat mikrofon atau audio interface, sekaligus cek nada apa yang sedang masuk dan frekuensi mana yang terlalu kencang saat slap.
 
 Playlist, Perfect Pitch, dan Tuner jalan langsung di browser (web maupun Encore App).
 
@@ -69,6 +69,8 @@ File Google Drive harus dibagikan sebagai **"Siapa saja yang memiliki link"**.
 - Pilihan alat: **Kromatik**, **Gitar**, **Gitar Drop D**, **Bass 4 senar**, **Bass 5 senar** (sampai B rendah ±31 Hz), **Ukulele**, **Biola**
 - Senar terdekat dipilih otomatis, dengan petunjuk kencangkan/kendorkan. Klik senar untuk mendengar nada acuannya dan mengunci tuner ke senar itu
 - Nada acuan A4 bisa diubah (415–466 Hz, standar 440)
+- **Pilih input**: mikrofon bawaan, Ampero / audio interface USB, dll. Pilihan diingat. Bar level di sebelahnya menunjukkan apakah suara benar-benar masuk
+- **Cek frekuensi** (tombol `T`): spektrum live 30 Hz–16 kHz. Tiap slap / pop / petikan direkam otomatis, lalu tiap band (Low-mid, Mid, Slap/attack 2–5 kHz, Presence, Click/air 8–16 kHz) dibandingkan ke Body (30–300 Hz). Tabel per nada memberi tanda merah kalau satu nada 3 dB lebih kencang dari rata-rata nada lain di band itu
 - Butuh izin mikrofon dan HTTPS (atau localhost). Mikrofon otomatis mati saat pindah halaman
 
 ## Encore App
@@ -121,7 +123,7 @@ Import repo ini di Vercel, pilih Framework Preset **Other**, lalu Deploy. Yang t
 
 | Path | Isi |
 |---|---|
-| `index.html`, `app/` | Tampilan: `core.js`, `playlist.js`, `bass.js` (Breakdown), `ear.js` (Perfect Pitch), `tuner.js` (Tuner), `aimode.js` (mode cepat/AI), `getapp.js` (halaman download), `sync.js`, `tour.js` (tur Cara pakai), `main.js`, `styles.css` |
+| `index.html`, `app/` | Tampilan: `core.js`, `playlist.js`, `bass.js` (Breakdown), `ear.js` (Perfect Pitch), `tuner.js` (Tuner), `spectrum.js` (Cek frekuensi), `aimode.js` (mode cepat/AI), `getapp.js` (halaman download), `sync.js`, `tour.js` (tur Cara pakai), `main.js`, `styles.css` |
 | `app/config.js` | Alamat rilis Encore App |
 | `api/` | Fungsi Vercel untuk Drive & judul |
 | `backend/app.py` | Server Encore App: antrian, library, file stem/MIDI, Drive & judul |
@@ -140,4 +142,4 @@ Import repo ini di Vercel, pilih Framework Preset **Other**, lalu Deploy. Yang t
 
 **Perfect Pitch:** `Space` putar soal lagi · `C`–`B` jawab not (Shift untuk ♯) · `Enter` mulai / lihat jawaban / soal berikutnya · `←`/`→` level sebelumnya / berikutnya · `Esc` keluar dari latihan
 
-**Tuner:** `Space` nyalakan/matikan mikrofon · `1`–`6` bunyikan & kunci senar
+**Tuner:** `Space` nyalakan/matikan mikrofon · `T` ganti Tuner / Cek frekuensi · `1`–`6` bunyikan & kunci senar

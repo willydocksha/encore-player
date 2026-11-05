@@ -456,7 +456,19 @@
           <h1>Stem gitar, bass, dan lainnya</h1>
         </div>
       </header>
-      <div class="tuner-wrap">
+      <div class="tuner-wrap" id="tunerWrap">
+        <div class="seg tuner-mode" id="tunerMode">
+          <button type="button" data-mode="tune">Tuner</button>
+          <button type="button" data-mode="spec">Cek frekuensi</button>
+        </div>
+        <section class="card tuner-input">
+          <label class="tuner-mic" title="Sumber suara. Pakai Ampero / audio interface kalau bass dicolok lewat USB.">
+            <svg><use href="#i-mic"/></svg>
+            <select id="tunerMic" aria-label="Pilih mikrofon / input"></select>
+          </label>
+          <div class="tuner-level" id="tunerLevel" title="Level input: kalau bar tidak bergerak saat senar dipetik, ganti input di sebelah kiri"><i id="tunerLevelBar"></i></div>
+          <button class="btn primary" type="button" id="tunerToggle"><svg><use href="#i-mic"/></svg><span>Mulai tuner</span></button>
+        </section>
         <div class="tuner-inst" id="tunerInst"></div>
         <section class="card tuner-card">
           <div class="tuner-meter idle" id="tunerMeter">
@@ -475,12 +487,28 @@
           <div class="tuner-strings" id="tunerStrings"></div>
           <p class="ear-small center" id="tunerLockNote"></p>
           <div class="tuner-foot">
-            <button class="btn primary" type="button" id="tunerToggle"><svg><use href="#i-mic"/></svg><span>Mulai tuner</span></button>
+            <span class="ear-small">Nada acuan</span>
             <div class="ear-stepper">
               <button class="icon-btn" type="button" id="tunerA4Minus" title="Turunkan nada acuan"><svg><use href="#i-down"/></svg></button>
               <button class="link-btn" type="button" id="tunerA4" title="Nada acuan (klik untuk kembali ke 440)"></button>
               <button class="icon-btn" type="button" id="tunerA4Plus" title="Naikkan nada acuan"><svg><use href="#i-up"/></svg></button>
             </div>
+          </div>
+        </section>
+        <section class="card spec-card" id="specCard" hidden>
+          <div class="spec-head">
+            <div>
+              <b>Spektrum</b>
+              <span class="spec-legend"><i class="live"></i>live <i class="hit"></i>pukulan terakhir</span>
+            </div>
+            <span class="spec-hover" id="specHover"></span>
+          </div>
+          <canvas class="spec-canvas" id="specCanvas" height="240"></canvas>
+          <div class="spec-hit" id="specHit"></div>
+          <div class="spec-table-wrap"><table class="spec-table" id="specTable"></table></div>
+          <div class="spec-foot">
+            <p class="ear-small">Slap / pop satu nada beberapa kali, tiap pukulan direkam otomatis. Angka = dB dibanding Body (30–300 Hz). Merah = 3 dB+ lebih kencang dari rata-rata nada lain (paling enak dicek lewat Ampero / interface, mic laptop lemah di atas 10 kHz).</p>
+            <button class="link-btn" type="button" id="specClear"><svg><use href="#i-trash"/></svg> Hapus</button>
           </div>
         </section>
       </div>
@@ -624,6 +652,7 @@ https://youtu.be/…"></textarea>
         <h3>Tuner</h3>
         <dl class="keys">
           <dt><kbd>Space</kbd></dt><dd>nyalakan / matikan mikrofon</dd>
+          <dt><kbd>T</kbd></dt><dd>ganti Tuner / Cek frekuensi</dd>
           <dt><kbd>1</kbd>–<kbd>6</kbd></dt><dd>bunyikan &amp; kunci senar</dd>
         </dl>
       </div>
