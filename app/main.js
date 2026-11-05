@@ -6,6 +6,7 @@ import { initBass, enterBassHome, enterSong, leaveSong, submitLink } from "./bas
 import { startTour, maybeStartTour } from "./tour.js";
 import { initEar, enterEar } from "./ear.js";
 import { initTuner, enterTuner } from "./tuner.js";
+import { checkUiUpdate } from "./uiupdate.js";
 
 router.add(/^#\/?$/, "playlist", () => { leaveSong(); document.title = "Encore"; });
 router.add(/^#\/perfect-pitch\/?$/, "ear", () => { leaveSong(); enterEar(); document.title = "Perfect Pitch · Encore"; });
@@ -42,5 +43,8 @@ initTuner();
 store.booting = false;
 // the bass pages depend on the local server, so learn whether it is there before routing
 server.check().then(() => { router.resolve(); maybeStartTour(); });
+
+// encore app: newer ui from the online site, applied with a reload
+checkUiUpdate();
 
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("/sw.js").catch(() => {});

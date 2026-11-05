@@ -102,6 +102,8 @@ uv pip install --python .venv/bin/python pyinstaller pillow
 .venv/bin/python backend/smoke_test.py dist/Encore.app/Contents/MacOS/Encore dist/EncoreAI/EncoreAI
 ```
 
+**Update tampilan tanpa rilis baru:** setiap halaman Encore App dibuka, app membandingkan file tampilannya (`index.html`, `sw.js`, `app/`) dengan versi online lewat `/api/ui` (`api/ui.js`, berisi sha1 tiap file). Kalau ada yang beda, muncul "Memperbarui tampilan…", file yang berubah diunduh ke folder data app (`ui/`), lalu halaman reload sendiri. Perubahan backend tetap butuh rilis. Kalau tampilan baru butuh endpoint yang belum ada di app lama, naikkan `API` di `api/ui.js` dan `UI_API` di `backend/version.py` bersamaan; app lama lalu tetap memakai tampilannya sendiri. Dari source fitur ini mati (file repo yang dipakai); untuk mengetes, set `ENCORE_UI_SOURCE=http://localhost:8780`.
+
 **Rilis untuk Mac, Windows, dan Linux sekaligus:** naikkan `APP_VERSION` di `backend/version.py`, lalu push tag yang sama. GitHub Actions (`.github/workflows/release.yml`) membangun app dan mesin AI untuk ketiga OS, menjalankan smoke test (klip pendek di mode cepat lalu mode AI) di tiap OS, lalu menerbitkan GitHub Release. Halaman download di web selalu menunjuk ke rilis terbaru.
 
 ```bash

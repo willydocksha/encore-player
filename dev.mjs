@@ -13,7 +13,7 @@ const TYPES = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css",
   ".json": "application/json", ".png": "image/png", ".svg": "image/svg+xml", ".webmanifest": "application/manifest+json",
 };
-const FUNCTIONS = { "/drive": "api/drive.js", "/title": "api/title.js" };
+const FUNCTIONS = { "/drive": "api/drive.js", "/title": "api/title.js", "/api/ui": "api/ui.js" };
 
 http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);

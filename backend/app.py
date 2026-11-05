@@ -9,6 +9,7 @@ downloads run in parallel; the heavy analysis runs one song at a time.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -30,9 +31,9 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi import Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 import ai
+from version import APP_VERSION, UI_API
 from pipeline import (DRIVE_PRIVATE_MSG, DRUM_VERSION, PIPELINE_VERSION, analyze, drive_title, drum_hits, fetch_audio,
                       open_drive, safe_name, shutdown_pool, source_key, stem_layers, write_drum_midi)
 
@@ -635,21 +636,133 @@ def title(type: str, id: str):
     return JSONResponse({"title": TITLES[(type, id)]})
 
 
+# ---------------------------------------------------------------- ui updates (no new release needed)
+# the installed app bundles the ui as it was at build time. on every page load the page asks
+# /api/ui/check; when the online site has newer ui files, /api/ui/update downloads just those into
+# the data folder, and they are served instead of the bundled ones. backend changes still need a release.
+
+UI_DIR = data_dir() / "ui"
+UI_META = UI_DIR / "meta.json"
+# run from source the repo files are the ui; ENCORE_UI_SOURCE (e.g. the dev server) turns updates on for testing
+UI_SOURCE = os.environ.get("ENCORE_UI_SOURCE") or (ONLINE if FROZEN else "")
+UI_PATH = re.compile(r"(index\.html|sw\.js|manifest\.webmanifest|app/[\w./-]+)")
+ui_lock = threading.Lock()
+
+
+def ui_reset_if_stale() -> None:
+    # a new release bundles a newer ui, so files pulled for an older version are dropped
+    try:
+        if UI_DIR.exists() and json.loads(UI_META.read_text()).get("app") != APP_VERSION:
+            shutil.rmtree(UI_DIR, ignore_errors=True)
+    except (OSError, ValueError):
+        shutil.rmtree(UI_DIR, ignore_errors=True)
+
+
+ui_reset_if_stale()
+
+
+def ui_file(rel: str) -> Path | None:
+    """the pulled copy of a ui file when there is one, else the bundled file."""
+    if not UI_PATH.fullmatch(rel) or ".." in rel.split("/"):
+        return None
+    for base in (UI_DIR, ROOT):
+        p = base / rel
+        if p.is_file():
+            return p
+    return None
+
+
+def ui_hash(rel: str) -> str | None:
+    p = ui_file(rel)
+    return hashlib.sha1(p.read_bytes()).hexdigest() if p else None
+
+
+def ui_manifest() -> dict:
+    with urllib.request.urlopen(f"{UI_SOURCE}/api/ui", timeout=5) as r:
+        return json.loads(r.read())
+
+
+def ui_changes(manifest: dict) -> list[str]:
+    # only files this app knows how to serve, whose content differs from what it serves now
+    return [rel for rel, sha in (manifest.get("files") or {}).items()
+            if UI_PATH.fullmatch(rel) and ".." not in rel.split("/") and ui_hash(rel) != sha]
+
+
+@app.get("/api/ui/check")
+def ui_check():
+    if not UI_SOURCE:
+        return {"available": False, "reason": "source"}
+    try:
+        manifest = ui_manifest()
+    except (OSError, ValueError):
+        return {"available": False, "reason": "offline"}
+    if (manifest.get("api") or 0) > UI_API:
+        # the newer ui needs a newer app; keep the current one
+        return {"available": False, "reason": "needs-app"}
+    changed = ui_changes(manifest)
+    return {"available": bool(changed), "files": len(changed)}
+
+
+@app.post("/api/ui/update")
+def ui_update():
+    if not UI_SOURCE:
+        raise HTTPException(400, "updates are off when running from source")
+    with ui_lock:
+        try:
+            manifest = ui_manifest()
+            if (manifest.get("api") or 0) > UI_API:
+                return {"updated": 0, "reason": "needs-app"}
+            changed = ui_changes(manifest)
+            # download everything first and check each hash, so a failed update changes nothing
+            got: dict[str, bytes] = {}
+            for rel in changed:
+                with urllib.request.urlopen(f"{UI_SOURCE}/{urllib.parse.quote(rel)}", timeout=20) as r:
+                    body = r.read()
+                if hashlib.sha1(body).hexdigest() != manifest["files"][rel]:
+                    raise ValueError(f"{rel} changed while downloading")
+                got[rel] = body
+        except (OSError, ValueError, KeyError) as err:
+            raise HTTPException(502, f"ui update failed: {err}")
+        # write each file next to its target, then swap it in
+        for rel, body in got.items():
+            dest = UI_DIR / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            tmp = dest.with_name(dest.name + ".part")
+            tmp.write_bytes(body)
+            os.replace(tmp, dest)
+        UI_META.write_text(json.dumps({"app": APP_VERSION, "updated": time.time()}))
+    return {"updated": len(got)}
+
+
 # ---------------------------------------------------------------- web app
+# js gets an explicit type: windows may map .js to text/plain, which browsers refuse for modules
+UI_TYPES = {".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".html": "text/html",
+            ".webmanifest": "application/manifest+json", ".json": "application/json"}
+
+
+def serve_ui(rel: str) -> FileResponse:
+    p = ui_file(rel)
+    if not p:
+        raise HTTPException(404)
+    return FileResponse(p, media_type=UI_TYPES.get(p.suffix))
+
 
 @app.get("/")
 def index():
-    return FileResponse(ROOT / "index.html")
+    return serve_ui("index.html")
 
 
 @app.get("/{name}")
 def root_file(name: str):
     if name not in PUBLIC_FILES:
         raise HTTPException(404)
-    return FileResponse(ROOT / name)
+    # icons only ever come from the bundle
+    return serve_ui(name) if UI_PATH.fullmatch(name) else FileResponse(ROOT / name)
 
 
-app.mount("/app", StaticFiles(directory=ROOT / "app"), name="app")
+@app.get("/app/{rel:path}")
+def app_file(rel: str):
+    return serve_ui(f"app/{rel}")
 
 
 # resume unfinished jobs after a restart, oldest first
