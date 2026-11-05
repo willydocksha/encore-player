@@ -322,11 +322,25 @@
             <button type="button" data-part="vocals">Vokal</button>
             <button type="button" data-part="piano">Piano</button>
             <button type="button" data-part="guitar">Gitar</button>
+            <button type="button" data-part="chords" title="Lembar chord per bar">Chord</button>
           </div>
         </div>
       </div>
 
       <div class="stage card"><canvas id="roll"></canvas></div>
+      <div class="sheet card" id="chordSheet" hidden>
+        <div class="sheet-tools">
+          <div class="sheet-keys" id="sheetKeys" role="group" aria-label="Transpose"></div>
+          <div class="sheet-acts">
+            <div class="seg">
+              <button type="button" id="sheetSmaller" title="Huruf lebih kecil" aria-label="Huruf lebih kecil">A−</button>
+              <button type="button" id="sheetBigger" title="Huruf lebih besar" aria-label="Huruf lebih besar">A+</button>
+            </div>
+            <button class="btn sm" type="button" id="sheetPrint" title="Cetak atau simpan sebagai PDF">Cetak / PDF</button>
+          </div>
+        </div>
+        <div class="sheet-body" id="sheetBody"></div>
+      </div>
       <canvas id="overview" class="overview"></canvas>
 
       <div class="dock card">

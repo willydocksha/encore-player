@@ -475,6 +475,9 @@ const player = (() => {
       });
     }
     drumGrid = buildDrumGrid(data);
+    transpose = 0;
+    try { transpose = Number(localStorage.getItem(`delve.transpose.${id}`)) || 0; } catch {}
+    sheet = null;
     fillers = findFillers(data.layers);
     loop = { a: null, b: null, on: false };
     syncLoopUi();
@@ -624,11 +627,12 @@ const player = (() => {
   }
 
   // ---------------- which part is shown
-  const PART_LABEL = { stack: "Multitrack", drums: "Drum", bass: "Bass", vocals: "Vokal", piano: "Piano", guitar: "Gitar" };
+  const PART_LABEL = { stack: "Multitrack", drums: "Drum", bass: "Bass", vocals: "Vokal", piano: "Piano", guitar: "Gitar", chords: "Chord" };
   function hasPart(p) {
     if (!song) return false;
     if (p === "stack" || p === "bass") return true;
     if (p === "drums") return !!song.layers?.drums;
+    if (p === "chords") return song.chords?.some((c) => c.label !== "N");
     return !!song[p]?.notes?.length;
   }
 
@@ -648,7 +652,13 @@ const player = (() => {
     if (!tabbable) sub = "graph";
     $$(".sub-switch button").forEach((b) => b.classList.toggle("active", b.dataset.sub === sub));
     GUTTER = part === "stack" ? 84 : part === "drums" ? 56 : 46;
-    $("#nowNoteLabel").textContent = { stack: "Not bass", drums: "Drum", bass: "Not bass", vocals: "Not vokal", piano: "Not piano", guitar: "Not gitar" }[part];
+    $("#nowNoteLabel").textContent = { stack: "Not bass", drums: "Drum", bass: "Not bass", vocals: "Not vokal", piano: "Not piano", guitar: "Not gitar", chords: "" }[part];
+    // chord sheet replaces the canvas; the note box has nothing to say there
+    const isSheet = part === "chords";
+    $(".stage").hidden = isSheet;
+    $("#chordSheet").hidden = !isSheet;
+    $("#bdNote").closest(".now-box").hidden = isSheet;
+    if (isSheet) buildSheet();
     $$(".dock .extra").forEach((g) => { if (g.querySelector("#tuningSel")) g.hidden = part !== "bass"; });
     // pitch range of a melodic part, at least 20 semitones
     const ms = notesOf().map((n) => n.midi);
@@ -712,7 +722,8 @@ const player = (() => {
     // pixel ratio changes (window moved to another display) do not trigger the resize observer
     const dpr = window.devicePixelRatio || 1;
     if (Math.abs(roll.width - Math.round(roll.clientWidth * dpr)) > 1 || Math.abs(roll.height - Math.round(roll.clientHeight * dpr)) > 1) resize();
-    draw(t);
+    if (part === "chords") updateSheet(t, m && !m.paused);
+    else draw(t);
     drawOverview(t);
     updateNow(t);
   }
@@ -1367,6 +1378,156 @@ const player = (() => {
     octx.fillRect((t / D) * W - 1, 0, 2 * (window.devicePixelRatio || 1), H);
   }
 
+  // ---------------- chord sheet: chords per bar, like a printed chord chart
+  let transpose = 0, sheet = null, sheetFont = store.get("chord-font", 1);
+  const MINOR_FLAT = [2, 7, 0, 5, 10]; // d g c f bb minor are written with flats
+  const MAJOR_FLAT = [5, 10, 3, 8, 1];
+
+  // key of the song after transposing: [root pitch class, minor?]
+  function sheetKey() {
+    const [root, mode] = (song.key || "C major").split(" ");
+    const r = chordRoot(root) ?? 0;
+    return [(((r + transpose) % 12) + 12) % 12, mode === "minor"];
+  }
+  const namesFor = (root, minor) => ((minor ? MINOR_FLAT : MAJOR_FLAT).includes(root) ? FLAT : SHARP);
+
+  // shift a chord label (root, quality, optional slash bass) by the current transpose
+  function shiftChord(label, names) {
+    const m = /^([A-G][#b]?)(.*?)(?:\/([A-G][#b]?))?$/.exec(label);
+    if (!m) return label;
+    const mv = (n) => names[(((chordRoot(n) + transpose) % 12) + 12) % 12];
+    return mv(m[1]) + m[2] + (m[3] ? "/" + mv(m[3]) : "");
+  }
+
+  // chord sounding at time t (or "N")
+  function chordAt(t) {
+    const ch = song.chords;
+    const c = ch[lowerBound(ch, t + 1e-6) - 1];
+    return c && t < c.t + c.d ? c.label : "N";
+  }
+
+  // bars from the downbeats (else every 4 beats), each split into its beats
+  function sheetBars() {
+    const beats = song.beats;
+    let starts = song.downbeats?.length > 1 ? [...song.downbeats] : beats.filter((_, i) => i % 4 === 0);
+    if (!starts.length) starts = [0];
+    if (beats[0] < starts[0] - 0.1) starts.unshift(beats[0]); // pickup bar before the first downbeat
+    const bars = starts.map((s, i) => {
+      const e = starts[i + 1] ?? song.duration;
+      const slots = beats.filter((b) => b >= s - 0.02 && b < e - 0.02);
+      if (!slots.length) slots.push(s);
+      return { s, e, slots: slots.map((t) => ({ t, label: chordAt(t + 0.08) })) };
+    });
+    // drop silent bars at the start and end
+    const silent = (b) => b.slots.every((x) => x.label === "N");
+    while (bars.length && silent(bars[0])) bars.shift();
+    while (bars.length && silent(bars.at(-1))) bars.pop();
+    return bars;
+  }
+
+  function buildSheet() {
+    if (!song) return;
+    const [root, minor] = sheetKey();
+    const names = namesFor(root, minor);
+    // transpose buttons: every key, the original one marked
+    const keys = $("#sheetKeys");
+    keys.replaceChildren(...SHARP.map((_, i) => {
+      const b = el("button", "key-btn" + (i === root ? " active" : ""), namesFor(i, minor)[i] + (minor ? "m" : ""));
+      b.type = "button";
+      if (((i - root + transpose) % 12 + 12) % 12 === 0) b.classList.add("orig");
+      b.title = b.classList.contains("orig") ? "Kunci asli" : `Transpose ke ${b.textContent}`;
+      b.onclick = () => {
+        let d = (((i - root) % 12) + 12) % 12;
+        if (d > 6) d -= 12;
+        transpose += d;
+        transpose = ((transpose % 12) + 18) % 12 - 6; // keep within -6..+5
+        try { localStorage.setItem(`delve.transpose.${jobId}`, String(transpose)); } catch {}
+        buildSheet();
+      };
+      return b;
+    }));
+    // bars, 4 per row; a chord is written where it changes
+    const bars = sheetBars();
+    const body = $("#sheetBody");
+    body.style.setProperty("--sheet-scale", sheetFont);
+    const head = el("div", "sheet-print-head");
+    head.append(el("h2", "", song.title || ""), el("p", "", `Kunci ${names[root]}${minor ? "m" : ""} · ${Math.round(song.bpm)} BPM`));
+    const grid = el("div", "sheet-grid");
+    let prev = "N";
+    const cells = [], marks = [];
+    bars.forEach((bar, bi) => {
+      const cell = el("div", "bar");
+      cell.dataset.i = bi;
+      cell.onclick = () => seek(bar.s);
+      // one column per beat; a chord name spans the beats until the next change
+      cell.style.gridTemplateColumns = `repeat(${bar.slots.length}, minmax(0, 1fr))`;
+      const toks = [];
+      bar.slots.forEach((slot, si) => {
+        const changed = slot.label !== prev;
+        prev = slot.label;
+        if (!changed && si > 0) { if (toks.length) toks.at(-1).span++; return; }
+        const tok = el("span", "tok");
+        tok.textContent = slot.label === "N" ? (changed ? "N.C." : "") : shiftChord(slot.label, names);
+        tok.title = tok.textContent;
+        if (!changed) tok.classList.add("held");
+        if (slot.label !== "N") tok.style.color = chordColor(slot.label, 1);
+        tok.onclick = (e) => { e.stopPropagation(); seek(slot.t); };
+        toks.push({ tok, si, span: 1 });
+        marks.push({ t: slot.t, tok });
+      });
+      for (const x of toks) x.tok.style.gridColumn = `${x.si + 1} / span ${x.span}`;
+      cell.append(...toks.map((x) => x.tok));
+      cells.push(cell);
+      grid.append(cell);
+    });
+    if (!bars.length) grid.append(el("p", "sheet-empty", "Belum ada chord yang terdeteksi."));
+    body.replaceChildren(head, grid);
+    sheet = { bars, cells, marks, names, cur: -1, curTok: null };
+  }
+
+  // highlight the current bar and chord; follow along while playing
+  function updateSheet(t, playing) {
+    if (!sheet) return;
+    const bi = lowerBound(sheet.bars, t + 1e-6, (b) => b.s) - 1;
+    const mi = lowerBound(sheet.marks, t + 1e-6) - 1;
+    // the token showing the chord that is sounding now
+    const tok = mi >= 0 && t < (sheet.bars.at(-1)?.e ?? 0) && sheet.marks[mi].tok.textContent ? sheet.marks[mi].tok : null;
+    if (tok !== sheet.curTok) {
+      sheet.curTok?.classList.remove("now");
+      tok?.classList.add("now");
+      sheet.curTok = tok;
+    }
+    if (bi === sheet.cur) return;
+    sheet.cells[sheet.cur]?.classList.remove("now");
+    const cell = sheet.cells[bi];
+    cell?.classList.add("now");
+    sheet.cur = bi;
+    if (!playing || !cell) return;
+    // scroll the sheet itself, or the page when the sheet is not a scroll box (phones)
+    const box = $("#sheetBody");
+    const inner = box.scrollHeight > box.clientHeight + 1;
+    const r = cell.getBoundingClientRect(), view = inner ? box.getBoundingClientRect() : { top: 0, height: innerHeight };
+    const y = r.top - view.top;
+    if (y < 20 || y > view.height * 0.55) {
+      const dy = y - view.height * 0.3;
+      if (inner) box.scrollBy({ top: dy, behavior: "smooth" });
+      else window.scrollBy({ top: dy, behavior: "smooth" });
+    }
+  }
+
+  const setSheetFont = (f) => {
+    sheetFont = Math.max(0.7, Math.min(1.8, Math.round(f * 10) / 10));
+    store.set("chord-font", sheetFont);
+    $("#sheetBody").style.setProperty("--sheet-scale", sheetFont);
+  };
+  $("#sheetSmaller").addEventListener("click", () => setSheetFont(sheetFont - 0.1));
+  $("#sheetBigger").addEventListener("click", () => setSheetFont(sheetFont + 0.1));
+  $("#sheetPrint").addEventListener("click", () => {
+    document.body.classList.add("print-sheet");
+    window.print();
+  });
+  window.addEventListener("afterprint", () => document.body.classList.remove("print-sheet"));
+
   // ---------------- now panel
   let lastNowKey = "";
   function updateNow(t) {
@@ -1376,11 +1537,13 @@ const player = (() => {
     const nxt = ch.slice(ci + 1).find((c) => c.label !== "N");
     $("#timeLabel").textContent = `${fmtTime(t)} / ${fmtTime(song.duration)}`;
     const [big, small, key] = nowText(t);
-    const k = `${ci}|${key}`;
+    const k = `${ci}|${key}|${part}|${transpose}`;
     if (k === lastNowKey) return;
     lastNowKey = k;
-    $("#nowChord").textContent = cur && cur.label !== "N" ? cur.label : "–";
-    $("#nextChord").textContent = nxt ? `berikutnya ${nxt.label}` : "";
+    // the chord sheet shows chords in the transposed key
+    const fmt = (l) => (part === "chords" && sheet ? shiftChord(l, sheet.names) : l);
+    $("#nowChord").textContent = cur && cur.label !== "N" ? fmt(cur.label) : "–";
+    $("#nextChord").textContent = nxt ? `berikutnya ${fmt(nxt.label)}` : "";
     $("#bdNote").textContent = big;
     $("#nowFret").textContent = small;
   }
