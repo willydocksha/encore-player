@@ -536,7 +536,8 @@ kbd { font: .74rem var(--f-mono); border: 1px solid var(--line); border-bottom-w
 .stage { flex: 1; min-height: 300px; position: relative; overflow: hidden; background: var(--surface); }
 #roll { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
 /* chord sheet: chords per bar, 4 bars per row */
-.sheet { flex: 1; min-height: 300px; display: flex; flex-direction: column; overflow: hidden; }
+/* chord/score panel only: dialogs share the "sheet" class, and a bare display rule would show them while closed */
+div.sheet:not([hidden]) { flex: 1; min-height: 300px; display: flex; flex-direction: column; overflow: hidden; }
 .sheet-tools { display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; padding: 12px 14px; border-bottom: 1px solid var(--line); }
 .sheet-keys { display: flex; flex-wrap: wrap; gap: 4px; }
 .key-btn { min-width: 34px; height: 30px; padding: 0 6px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); font: 600 .78rem var(--f-mono); cursor: pointer; }
