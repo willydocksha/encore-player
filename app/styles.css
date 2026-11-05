@@ -558,9 +558,39 @@ kbd { font: .74rem var(--f-mono); border: 1px solid var(--line); border-bottom-w
   .sheet-tools { padding: 10px; }
   .sheet-body { padding: 10px; }
 }
+/* score: not balok (svg), not angka and letters (html) */
+.score-opts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.score-opts .seg button { padding: 5px 10px; font-size: .8rem; }
+#scoreKey { height: 32px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); padding: 0 8px; font: 600 .8rem var(--f-mono); }
+.score-inner { min-height: 120px; }
+.score-inner svg { display: block; }
+.score-inner .vf-stavenote { cursor: pointer; }
+.score-inner .vf-stavenote.now path, .score-inner .vf-stavenote.now rect { fill: var(--bass) !important; stroke: var(--bass) !important; }
+.score-cursor { position: absolute; left: 0; top: 0; width: 8px; border-radius: 4px; background: color-mix(in srgb, var(--bass) 30%, transparent); pointer-events: none; transition: transform .06s linear; }
+.nb-head { display: flex; gap: 14px; align-items: baseline; margin-bottom: 10px; color: var(--muted); font: 600 .85rem var(--f-mono); }
+.nb-head b { color: var(--ink); font-size: 1rem; }
+.nb-lines { --u: calc(1.15rem * var(--sheet-scale, 1)); display: flex; flex-wrap: wrap; row-gap: calc(var(--u) * 1.4); font-size: var(--u); }
+.nb-bar { position: relative; display: flex; align-items: stretch; padding: calc(var(--u) * 1.3) 6px 2px; border-right: 2px solid var(--line); border-radius: 4px; }
+.nb-bar.now { background: var(--bass-soft); }
+.nb-num { position: absolute; left: 4px; bottom: -1.1em; font: 600 .55em var(--f-mono); color: var(--muted); opacity: .7; }
+.nb-beat { display: flex; padding: 0 .3em; }
+.nb-it { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-width: 1.05em; padding-top: 10px; cursor: pointer; font: 700 1em var(--f-mono); line-height: 1.15; }
+.nb-it[data-l="1"] { background: linear-gradient(currentColor, currentColor) 0 0 / 100% 1.5px no-repeat; }
+.nb-it[data-l="2"] { background: linear-gradient(currentColor, currentColor) 0 0 / 100% 1.5px no-repeat, linear-gradient(currentColor, currentColor) 0 4px / 100% 1.5px no-repeat; }
+.nb-it[data-l="2"] { padding-top: 13px; }
+.nb-n { position: relative; }
+.nb-n sup { font-size: .55em; margin-left: 1px; }
+.nb-dot { margin-left: 1px; }
+.nb-up, .nb-dn { font-size: .45em; line-height: .6; letter-spacing: -.1em; }
+.nb-up { position: absolute; top: calc(100% - 100%); margin-top: 3px; }
+.nb-it[data-l="2"] .nb-up { margin-top: 6px; }
+.nb-dn { margin-top: 1px; }
+.nb-chord { position: absolute; left: 0; bottom: 100%; margin-bottom: 4px; font: 700 .7em var(--f-mono); color: var(--bass); white-space: nowrap; }
+.nb-it.now { color: var(--bass); }
+.nb-it:hover { color: var(--bass); }
 /* print only the chord sheet */
 @media print {
-  body.print-sheet * { visibility: hidden; }
+  body.print-sheet *, body.print-score * { visibility: hidden; }
   body.print-sheet #chordSheet, body.print-sheet #chordSheet * { visibility: visible; }
   body.print-sheet #chordSheet { position: absolute; inset: 0 auto auto 0; width: 100%; border: 0; box-shadow: none; overflow: visible; }
   body.print-sheet .sheet-tools { display: none; }
@@ -572,6 +602,14 @@ kbd { font: .74rem var(--f-mono); border: 1px solid var(--line); border-bottom-w
   body.print-sheet .sheet-grid .tok.held { opacity: .35; }
   body.print-sheet .sheet-grid .bar { background: none !important; border-left-color: #999; break-inside: avoid; }
   body.print-sheet .sheet-grid .tok.now { outline: 0; }
+  body.print-score #scoreSheet, body.print-score #scoreSheet * { visibility: visible; }
+  body.print-score #scoreSheet { position: absolute; inset: 0 auto auto 0; width: 100%; border: 0; box-shadow: none; overflow: visible; color: #000; }
+  body.print-score .sheet-tools, body.print-score .score-cursor { display: none; }
+  body.print-score .sheet-body { overflow: visible; padding: 0; }
+  body.print-score .score-inner svg path, body.print-score .score-inner svg rect { fill: #000 !important; stroke: #000 !important; }
+  body.print-score .score-inner svg text { fill: #000 !important; }
+  body.print-score .nb-it, body.print-score .nb-chord, body.print-score .nb-head b { color: #000 !important; }
+  body.print-score .nb-bar { background: none !important; break-inside: avoid; border-color: #999; }
 }
 .overview { width: 100%; height: 46px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; display: block; }
 .dock { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 22px; padding: 12px 16px; position: sticky; bottom: 12px; z-index: 5; }

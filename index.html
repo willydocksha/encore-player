@@ -332,6 +332,7 @@
             <button type="button" data-part="piano">Piano</button>
             <button type="button" data-part="guitar">Gitar</button>
             <button type="button" data-part="chords" title="Lembar chord per bar">Chord</button>
+            <button type="button" data-part="score" title="Not balok, not angka, atau huruf">Not</button>
           </div>
         </div>
       </div>
@@ -349,6 +350,31 @@
           </div>
         </div>
         <div class="sheet-body" id="sheetBody"></div>
+      </div>
+      <div class="sheet card" id="scoreSheet" hidden>
+        <div class="sheet-tools">
+          <div class="score-opts">
+            <div class="seg" id="scorePart" role="tablist" aria-label="Bagian">
+              <button type="button" data-score-part="vocals">Vokal</button>
+              <button type="button" data-score-part="bass">Bass</button>
+            </div>
+            <div class="seg" id="scoreMode" role="tablist" aria-label="Notasi">
+              <button type="button" data-mode="staff">Not balok</button>
+              <button type="button" data-mode="numbers">Not angka</button>
+              <button type="button" data-mode="letters">Huruf</button>
+            </div>
+            <select id="scoreKey" aria-label="Transpose"></select>
+          </div>
+          <div class="sheet-acts">
+            <div class="seg">
+              <button type="button" id="scoreSmaller" title="Lebih kecil" aria-label="Lebih kecil">A−</button>
+              <button type="button" id="scoreBigger" title="Lebih besar" aria-label="Lebih besar">A+</button>
+            </div>
+            <button class="btn sm" type="button" id="scoreXml" title="Buka di MuseScore, Sibelius, Finale, dll.">MusicXML</button>
+            <button class="btn sm" type="button" id="scorePrint" title="Cetak atau simpan sebagai PDF">Cetak / PDF</button>
+          </div>
+        </div>
+        <div class="sheet-body score-body" id="scoreBody"><div class="score-inner" id="scoreInner"></div><div class="score-cursor" id="scoreCursor" hidden></div></div>
       </div>
       <canvas id="overview" class="overview"></canvas>
 

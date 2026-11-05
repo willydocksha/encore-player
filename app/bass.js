@@ -4,6 +4,7 @@ import { $, $$, el, icon, setIcon, store, fmtTime, fmtDate, fmtAgo, parseLink, t
 import { renderGetApp } from "./getapp.js";
 import { MODES, getMode, setMode, ensureAi } from "./aimode.js";
 import { addToPlaylist } from "./playlist.js";
+import { buildScore, loadVex, renderStaff, renderNumbers, toMusicXml } from "./score.js";
 
 const SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const FLAT = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
@@ -435,7 +436,7 @@ const player = (() => {
   let pitchLo = 28, pitchHi = 55;
   let barOf = [];
   const notesOf = (p = part) =>
-    p === "vocals" || p === "piano" || p === "guitar" ? song[p]?.notes || [] : p === "bass" || p === "stack" ? song.notes : [];
+    p === "score" ? notesOf(scorePart) : p === "vocals" || p === "piano" || p === "guitar" ? song[p]?.notes || [] : p === "bass" || p === "stack" ? song.notes : [];
   let guitarFrets = [], drumGrid = null, fillers = {};
 
   // smooth clock: interpolate between coarse currentTime updates
@@ -478,6 +479,8 @@ const player = (() => {
     transpose = 0;
     try { transpose = Number(localStorage.getItem(`delve.transpose.${id}`)) || 0; } catch {}
     sheet = null;
+    score = null;
+    if (!(data.vocals?.notes?.length) && scorePart === "vocals") scorePart = "bass";
     fillers = findFillers(data.layers);
     loop = { a: null, b: null, on: false };
     syncLoopUi();
@@ -627,12 +630,13 @@ const player = (() => {
   }
 
   // ---------------- which part is shown
-  const PART_LABEL = { stack: "Multitrack", drums: "Drum", bass: "Bass", vocals: "Vokal", piano: "Piano", guitar: "Gitar", chords: "Chord" };
+  const PART_LABEL = { stack: "Multitrack", drums: "Drum", bass: "Bass", vocals: "Vokal", piano: "Piano", guitar: "Gitar", chords: "Chord", score: "Not" };
   function hasPart(p) {
     if (!song) return false;
     if (p === "stack" || p === "bass") return true;
     if (p === "drums") return !!song.layers?.drums;
     if (p === "chords") return song.chords?.some((c) => c.label !== "N");
+    if (p === "score") return !!(song.vocals?.notes?.length || song.notes?.length);
     return !!song[p]?.notes?.length;
   }
 
@@ -652,13 +656,15 @@ const player = (() => {
     if (!tabbable) sub = "graph";
     $$(".sub-switch button").forEach((b) => b.classList.toggle("active", b.dataset.sub === sub));
     GUTTER = part === "stack" ? 84 : part === "drums" ? 56 : 46;
-    $("#nowNoteLabel").textContent = { stack: "Not bass", drums: "Drum", bass: "Not bass", vocals: "Not vokal", piano: "Not piano", guitar: "Not gitar", chords: "" }[part];
+    $("#nowNoteLabel").textContent = { stack: "Not bass", drums: "Drum", bass: "Not bass", vocals: "Not vokal", piano: "Not piano", guitar: "Not gitar", chords: "", score: scorePart === "vocals" ? "Not vokal" : "Not bass" }[part];
     // chord sheet replaces the canvas; the note box has nothing to say there
-    const isSheet = part === "chords";
-    $(".stage").hidden = isSheet;
+    const isSheet = part === "chords", isScore = part === "score";
+    $(".stage").hidden = isSheet || isScore;
     $("#chordSheet").hidden = !isSheet;
+    $("#scoreSheet").hidden = !isScore;
     $("#bdNote").closest(".now-box").hidden = isSheet;
     if (isSheet) buildSheet();
+    if (isScore) buildScoreView();
     $$(".dock .extra").forEach((g) => { if (g.querySelector("#tuningSel")) g.hidden = part !== "bass"; });
     // pitch range of a melodic part, at least 20 semitones
     const ms = notesOf().map((n) => n.midi);
@@ -723,6 +729,7 @@ const player = (() => {
     const dpr = window.devicePixelRatio || 1;
     if (Math.abs(roll.width - Math.round(roll.clientWidth * dpr)) > 1 || Math.abs(roll.height - Math.round(roll.clientHeight * dpr)) > 1) resize();
     if (part === "chords") updateSheet(t, m && !m.paused);
+    else if (part === "score") updateScore(t, m && !m.paused);
     else draw(t);
     drawOverview(t);
     updateNow(t);
@@ -1441,7 +1448,7 @@ const player = (() => {
         if (d > 6) d -= 12;
         transpose += d;
         transpose = ((transpose % 12) + 18) % 12 - 6; // keep within -6..+5
-        try { localStorage.setItem(`delve.transpose.${jobId}`, String(transpose)); } catch {}
+        setTranspose(transpose);
         buildSheet();
       };
       return b;
@@ -1503,17 +1510,145 @@ const player = (() => {
     cell?.classList.add("now");
     sheet.cur = bi;
     if (!playing || !cell) return;
-    // scroll the sheet itself, or the page when the sheet is not a scroll box (phones)
-    const box = $("#sheetBody");
-    const inner = box.scrollHeight > box.clientHeight + 1;
-    const r = cell.getBoundingClientRect(), view = inner ? box.getBoundingClientRect() : { top: 0, height: innerHeight };
-    const y = r.top - view.top;
-    if (y < 20 || y > view.height * 0.55) {
-      const dy = y - view.height * 0.3;
-      if (inner) box.scrollBy({ top: dy, behavior: "smooth" });
-      else window.scrollBy({ top: dy, behavior: "smooth" });
-    }
+    follow($("#sheetBody"), cell.getBoundingClientRect());
   }
+
+  function setTranspose(v) {
+    transpose = v;
+    try { localStorage.setItem(`delve.transpose.${jobId}`, String(transpose)); } catch {}
+    score = null;
+    lastNowKey = "";
+  }
+
+  // scroll the sheet box, or the page when the sheet is not a scroll box (phones), to keep rect in view
+  function follow(boxEl, r) {
+    // nearest ancestor that actually scrolls, else the page
+    let sc = boxEl;
+    while (sc && !(sc.scrollHeight > sc.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(sc).overflowY))) sc = sc.parentElement;
+    const view = sc ? sc.getBoundingClientRect() : { top: 0, height: innerHeight };
+    const y = r.top - view.top;
+    if (y > 20 && y + r.height < view.height * 0.6) return;
+    (sc || window).scrollBy({ top: y - view.height * 0.3, behavior: "smooth" });
+  }
+
+  // ---------------- score: transcribed melody as not balok / not angka / letters
+  let score = null, scorePart = store.get("score-part", "vocals"), scoreMode = store.get("score-mode", "staff");
+  let scoreScale = store.get("score-scale", 1), scoreToken = 0;
+
+  async function buildScoreView() {
+    if (!song) return;
+    const token = ++scoreToken;
+    if (scorePart === "vocals" && !song.vocals?.notes?.length) scorePart = "bass";
+    $$("#scorePart button").forEach((b) => {
+      b.classList.toggle("active", b.dataset.scorePart === scorePart);
+      b.hidden = b.dataset.scorePart === "vocals" ? !song.vocals?.notes?.length : !song.notes?.length;
+    });
+    $$("#scoreMode button").forEach((b) => b.classList.toggle("active", b.dataset.mode === scoreMode));
+    const [root, minor] = sheetKey();
+    const names = namesFor(root, minor);
+    // key picker shares the transpose with the chord sheet
+    const sel = $("#scoreKey");
+    sel.replaceChildren(...SHARP.map((_, i) => {
+      const d = ((i - root) % 12 + 12) % 12;
+      const o = el("option", "", namesFor(i, minor)[i] + (minor ? "m" : "") + (((i - root + transpose) % 12 + 12) % 12 === 0 ? " (asli)" : ""));
+      o.value = String(d > 6 ? d - 12 : d);
+      o.selected = i === root;
+      return o;
+    }));
+    $("#nowNoteLabel").textContent = scorePart === "vocals" ? "Not vokal" : "Not bass";
+    const model = buildScore(song, scorePart, transpose, (l) => shiftChord(l, names));
+    const inner = $("#scoreInner");
+    $("#scoreCursor").hidden = true;
+    let items;
+    if (scoreMode === "staff") {
+      try { await loadVex(); } catch { inner.replaceChildren(el("p", "sheet-empty", "Not balok gagal dimuat.")); return; }
+      if (token !== scoreToken) return;
+      const cs = getComputedStyle(document.body);
+      items = renderStaff(inner, model, { scale: scoreScale, ink: cs.getPropertyValue("--ink").trim() || "#000", chordInk: cs.getPropertyValue("--bass").trim() || "#555" });
+    } else {
+      inner.style.setProperty("--sheet-scale", scoreScale);
+      items = renderNumbers(inner, model, scoreMode === "letters", el);
+    }
+    items.forEach((it) => { if (it.el) it.el.onclick = (e) => { e.stopPropagation(); seek(it.t0); }; });
+    score = { model, items, cur: null, mode: scoreMode, width: inner.clientWidth };
+    lastNowKey = "";
+    updateScore(now(), false);
+  }
+
+  // highlight the sounding note and move the cursor through the staff
+  function updateScore(t, playing) {
+    if (!score) return;
+    const items = score.items;
+    const i = lowerBound(items, t + 1e-6, (x) => x.t0) - 1;
+    const it = i >= 0 && t < items[i].t1 + 0.05 ? items[i] : null;
+    const cur = $("#scoreCursor");
+    if (score.mode === "staff" && i >= 0 && i < items.length) {
+      const x = items[i];
+      const f = Math.max(0, Math.min(1, (t - x.t0) / (x.t1 - x.t0 || 1)));
+      cur.hidden = t > items.at(-1).t1;
+      const inner = $("#scoreInner");
+      cur.style.transform = `translate(${inner.offsetLeft + x.x0 + f * (x.x1 - x.x0) - 4}px, ${inner.offsetTop + x.top}px)`;
+      cur.style.height = `${x.bottom - x.top}px`;
+    } else cur.hidden = true;
+    if (it === score.cur) return;
+    score.cur?.el?.classList.remove("now");
+    score.cur?.barEl?.classList.remove("now");
+    it?.el?.classList.add("now");
+    it?.barEl?.classList.add("now");
+    score.cur = it;
+    if (!playing || !it) return;
+    const box = $("#scoreBody"), br = box.getBoundingClientRect();
+    const r = score.mode === "staff"
+      ? { top: br.top - box.scrollTop + it.top + $("#scoreInner").offsetTop, height: it.bottom - it.top }
+      : it.el.getBoundingClientRect();
+    follow(box, r);
+  }
+
+  $$("#scorePart button").forEach((b) => b.addEventListener("click", () => {
+    scorePart = b.dataset.scorePart;
+    store.set("score-part", scorePart);
+    buildScoreView();
+  }));
+  $$("#scoreMode button").forEach((b) => b.addEventListener("click", () => {
+    scoreMode = b.dataset.mode;
+    store.set("score-mode", scoreMode);
+    buildScoreView();
+  }));
+  $("#scoreKey").addEventListener("change", (e) => {
+    let v = transpose + Number(e.target.value);
+    v = ((v % 12) + 18) % 12 - 6;
+    setTranspose(v);
+    buildScoreView();
+  });
+  const setScoreScale = (f) => {
+    scoreScale = Math.max(0.6, Math.min(1.8, Math.round(f * 10) / 10));
+    store.set("score-scale", scoreScale);
+    buildScoreView();
+  };
+  $("#scoreSmaller").addEventListener("click", () => setScoreScale(scoreScale - 0.1));
+  $("#scoreBigger").addEventListener("click", () => setScoreScale(scoreScale + 0.1));
+  $("#scoreXml").addEventListener("click", () => {
+    if (!score) return;
+    const label = scorePart === "vocals" ? "Vokal" : "Bass";
+    const xml = toMusicXml(score.model, song.title || "Encore", label);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([xml], { type: "application/vnd.recordare.musicxml+xml" }));
+    a.download = `${(song.title || "Encore").replace(/[\\/:*?"<>|]/g, "")} - ${label}.musicxml`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  });
+  $("#scorePrint").addEventListener("click", () => {
+    document.body.classList.add("print-score");
+    window.print();
+  });
+  window.addEventListener("afterprint", () => document.body.classList.remove("print-score"));
+  // the staff layout depends on the width
+  let scoreResize = 0;
+  new ResizeObserver(() => {
+    if (!score || part !== "score" || Math.abs($("#scoreInner").clientWidth - score.width) < 8) return;
+    clearTimeout(scoreResize);
+    scoreResize = setTimeout(buildScoreView, 200);
+  }).observe($("#scoreBody"));
 
   const setSheetFont = (f) => {
     sheetFont = Math.max(0.7, Math.min(1.8, Math.round(f * 10) / 10));

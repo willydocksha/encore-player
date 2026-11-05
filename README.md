@@ -34,13 +34,14 @@ File Google Drive harus dibagikan sebagai **"Siapa saja yang memiliki link"**.
 - Transkripsi bass: pYIN + deteksi petikan ulang. Bagian slap/pop memakai Basic Pitch, dan not sangat rendah diisi pYIN
 - Tempo, beat & downbeat (beat_this; mode cepat: librosa + tebakan awal bar 4/4), chord & kunci, slash chord dari bass
 - **Mixer 6 stem**: Drum, Bass, Vokal, Gitar, Piano, Lainnya (pad/synth). Masing-masing bisa mute, solo, dan diatur volumenya; semuanya kalau dijumlah persis lagu aslinya
-- Satu pilihan tampilan: **Multitrack · Drum · Bass · Vokal · Piano · Gitar · Chord** (bagian yang tidak ada disembunyikan)
+- Satu pilihan tampilan: **Multitrack · Drum · Bass · Vokal · Piano · Gitar · Chord · Not** (bagian yang tidak ada disembunyikan)
   - **Multitrack**: semua instrumen bertumpuk di satu timeline, dengan penanda **filler** (gitar/piano/pad mengisi saat vokal diam) dan **fill drum**. Klik nama lajur untuk mute
   - **Drum**: grid 16 langkah per bar (hi-hat, snare, tom, kick), bar fill ditandai otomatis. Deteksinya memakai ciri spektrum, jadi di rekaman live snare masih bisa tertukar dengan klik kick atau simbal
   - **Bass**: grafik atau tab (4/5 senar, otomatis)
   - **Vokal**: kontur nada (vibrato, slide) plus not-notnya
   - **Piano / Gitar**: piano roll dari not polifonik (Basic Pitch, nada harmonik disaring). Gitar juga punya **tab 6 senar** (tebakan terbaik: jangkauan tangan maks. 4 fret, perpindahan minimal)
   - **Chord**: lembar chord per bar (4 bar per baris) seperti chord sheet, tanpa lirik. Transpose ke kunci mana pun, ukuran huruf A−/A+, cetak atau simpan PDF. Bar yang sedang bunyi menyala dan halaman ikut bergulir; klik bar atau chord untuk lompat ke situ
+  - **Not**: melodi vokal atau bass sebagai **not balok**, **not angka**, atau **huruf** (C D E), dengan nama chord di atasnya. Not yang sedang bunyi menyala dan halaman ikut bergulir; klik not untuk lompat. Not dibulatkan ke grid 1/16 (1/8 untuk lagu ≥110 BPM) mengikuti beat yang terdeteksi, jadi tempo live yang naik turun tidak merusak birama. Bisa transpose, cetak/PDF, dan export **MusicXML** untuk dibuka di MuseScore, Sibelius, Finale, dll. Hasilnya draf dari transkripsi otomatis: vokal masih bisa penuh not hiasan
 - **Chord lengkap**: mayor/minor plus 7, maj7, m7, sus2, sus4, add9, dim, dan slash chord. Not bass ikut membantu (misalnya C dengan bass A dibaca Am7). Ambang batasnya sengaja konservatif
 - **MIDI** per bagian: bass, vokal, piano, gitar, drum
 - Loop dan speed tanpa ubah nada

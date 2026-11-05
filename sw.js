@@ -1,7 +1,7 @@
 // keeps the app itself available offline (network first, cached copy as fallback).
 // drive audio is cached separately by the page in 'encore-audio-v1', the encore app serves breakdown itself.
 const SHELL = 'encore-shell-v17';
-const FILES = ['/', '/app/styles.css', '/app/core.js', '/app/playlist.js', '/app/bass.js', '/app/getapp.js', '/app/aimode.js', '/app/sync.js', '/app/config.js', '/app/tour.js', '/app/ear.js', '/app/tuner.js', '/app/main.js',
+const FILES = ['/', '/app/styles.css', '/app/core.js', '/app/playlist.js', '/app/bass.js', '/app/score.js', '/app/getapp.js', '/app/aimode.js', '/app/sync.js', '/app/config.js', '/app/tour.js', '/app/ear.js', '/app/tuner.js', '/app/main.js',
   '/manifest.webmanifest', '/icon-180.png', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', e => {
