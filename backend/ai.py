@@ -1,7 +1,8 @@
 """the optional ai engine: download, install, and run it for one song.
 
 the app itself only has the classic analysis. the engine (engine.py, built as EncoreAI) is a
-separate download from the github release of the same app version, unpacked into the data folder.
+separate download from the github release of this app version, unpacked into the data folder and
+kept across app updates until ENGINE_VERSION changes. the engine runs the app's own pipeline.py.
 """
 
 from __future__ import annotations
@@ -20,13 +21,16 @@ from collections import deque
 from pathlib import Path
 from typing import Callable
 
-from version import APP_VERSION, RELEASES
+from version import APP_VERSION, ENGINE_VERSION, RELEASES
 
 FROZEN = getattr(sys, "frozen", False)
 WIN = sys.platform == "win32"
 PLATFORM = {"darwin": "macOS", "win32": "Windows"}.get(sys.platform, "Linux")
 ARCHIVE = f"Encore-AI-{PLATFORM}.{'zip' if WIN else 'tar.gz'}"
 EXE_NAME = "EncoreAI.exe" if WIN else "EncoreAI"
+# the packaged app ships pipeline.py as a file for the engine (encore.spec)
+PIPELINE = Path(getattr(sys, "_MEIPASS", "")) / "engine" / "pipeline.py"
+INSTALLED = f"v{ENGINE_VERSION}"
 
 _root: Path | None = None
 _lock = threading.Lock()
@@ -39,7 +43,7 @@ def setup(data_dir: Path) -> None:
 
 
 def engine_dir() -> Path:
-    return _root / APP_VERSION / "EncoreAI"
+    return _root / INSTALLED / "EncoreAI"
 
 
 def command() -> list[str] | None:
@@ -71,7 +75,7 @@ def install() -> dict:
 
 
 def _install() -> None:
-    part = _root / f"{APP_VERSION}.partial"
+    part = _root / f"{INSTALLED}.partial"
     try:
         shutil.rmtree(part, ignore_errors=True)
         part.mkdir(parents=True)
@@ -99,7 +103,7 @@ def _install() -> None:
         for old in _root.iterdir():
             if old != part:
                 shutil.rmtree(old, ignore_errors=True)
-        part.rename(_root / APP_VERSION)
+        part.rename(_root / INSTALLED)
         state.update(state="ready", error=None)
     except Exception as e:
         shutil.rmtree(part, ignore_errors=True)
@@ -127,7 +131,9 @@ def analyze(job_dir: Path, title: str, progress: Callable[[str, float], None]) -
     # outside tmp/: the engine removes tmp/ when it finishes, and windows can't delete an open file
     log_path = job_dir / "engine.log"
     log = log_path.open("w", encoding="utf-8", errors="replace")
-    proc = subprocess.Popen([*cmd, "analyze", str(job_dir), title], stdout=subprocess.PIPE, stderr=log,
+    # the engine runs this app's analysis code, so app updates need no new engine
+    env = {**os.environ, "ENCORE_PIPELINE": str(PIPELINE)} if FROZEN and PIPELINE.exists() else None
+    proc = subprocess.Popen([*cmd, "analyze", str(job_dir), title], stdout=subprocess.PIPE, stderr=log, env=env,
                             text=True, encoding="utf-8", errors="replace", **_no_window())
     result = None
     tail: deque[str] = deque(maxlen=5)

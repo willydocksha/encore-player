@@ -43,6 +43,11 @@ jobs:
           want="app-v$(sed -n 's/^APP_VERSION = "\(.*\)"/\1/p' backend/version.py)"
           [ "$want" = "$GITHUB_REF_NAME" ] || { echo "::error::tag $GITHUB_REF_NAME, but backend/version.py says $want"; exit 1; }
 
+      # the engine is kept across app updates: its inputs may only change with a new ENGINE_VERSION
+      - name: Check the ai engine version
+        shell: bash
+        run: python3 backend/engine_fingerprint.py --check
+
       - name: Install
         shell: bash
         run: |

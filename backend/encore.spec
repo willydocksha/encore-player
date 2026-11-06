@@ -15,6 +15,8 @@ WIN = sys.platform == "win32"
 datas = [(str(ROOT / "index.html"), "."), (str(ROOT / "sw.js"), "."), (str(ROOT / "manifest.webmanifest"), "."),
          (str(ROOT / "app"), "app")]
 datas += [(str(p), ".") for p in ROOT.glob("icon-*.png")]
+# the analysis code as a file: the ai engine runs it (backend/ai.py), so app updates keep the engine
+datas += [(str(ROOT / "backend" / "pipeline.py"), "engine")]
 binaries = []
 hiddenimports = collect_submodules("uvicorn")
 
