@@ -21,6 +21,19 @@ export function keyInfo(key, transpose) {
   return { root: r, minor, major, flat, names, fifths: FIFTHS[major], vfKey: names[r] + (minor ? "m" : ""), label: names[r] + (minor ? "m" : "") };
 }
 
+// key sounding at time t: songs with a modulation carry key sections [{t, key}]
+export function keyAt(song, t) {
+  let k = song.key;
+  for (const s of song.keys || []) if (s.t <= t + 0.05) k = s.key;
+  return k;
+}
+
+// key label for chips: "G major → A major" on a modulation
+export function keysLabel(song) {
+  const ks = (song.keys || []).map((s) => s.key);
+  return ks.length > 1 ? ks.join(" → ") : song.key;
+}
+
 // first index with key(arr[i]) >= x
 function lowerBound(arr, x, key) {
   let lo = 0, hi = arr.length;
@@ -87,7 +100,7 @@ const DUR = { 16: ["w", 0], 12: ["h", 1], 8: ["h", 0], 6: ["q", 1], 4: ["q", 0],
 // the whole score of one part: bars with written pieces, chords, key and clef
 export function buildScore(song, part, transpose, chordLabel) {
   const bars = barGrid(song);
-  const key = keyInfo(song.key, transpose);
+  for (const bar of bars) bar.key = keyInfo(keyAt(song, bar.s), transpose);
   let raw = (part === "vocals" ? song.vocals?.notes : song.notes) || [];
   if (part === "vocals") raw = raw.filter((n) => (n.v ?? 1) >= 0.2); // quiet notes are mostly bleed
   // snap to the grid, one note at a time (later notes cut earlier ones)
@@ -143,7 +156,7 @@ export function buildScore(song, part, transpose, chordLabel) {
     if (c.label === "N") continue;
     const g = Math.round(toUnit(bars, c.t));
     const bar = bars[Math.max(0, lowerBound(bars, g + 1e-9, (b) => b.U0) - 1)];
-    if (g - bar.U0 < bar.units) bar.chords.push({ u: g - bar.U0, label: chordLabel(c.label) });
+    if (g - bar.U0 < bar.units) bar.chords.push({ u: g - bar.U0, label: chordLabel(c.label, c.t) });
   }
   // drop empty bars at the start and end
   const empty = (b) => b.items.every((x) => x.midi == null) && !b.chords.length;
@@ -153,7 +166,9 @@ export function buildScore(song, part, transpose, chordLabel) {
   const counts = {};
   bars.forEach((b) => { counts[b.nb] = (counts[b.nb] || 0) + 1; });
   const beats = +Object.entries(counts).sort((x, y) => y[1] - x[1])[0]?.[0] || 4;
-  return { bars: bars.slice(a, z), key, clef, shift, beats, bpm: song.bpm, part, notes: ev.length };
+  const shown = bars.slice(a, z);
+  const key = shown[0]?.key || keyInfo(song.key, transpose);
+  return { bars: shown, key, clef, shift, beats, bpm: song.bpm, part, notes: ev.length };
 }
 
 // ---------------------------------------------------------------- not balok (vexflow)
@@ -190,7 +205,7 @@ export function renderStaff(box, model, { scale = 1, ink = "#000", chordInk = "#
   ctx.setStrokeStyle(ink);
   const items = [];
   const clefAnno = model.shift ? "8vb" : undefined;
-  let prevBeats = 0, lastNote = null;
+  let prevBeats = 0, lastNote = null, prevKey = null;
   const ties = [];
   model.bars.forEach((bar, bi) => {
     const li = Math.floor(bi / perLine), col = bi % perLine;
@@ -203,20 +218,22 @@ export function renderStaff(box, model, { scale = 1, ink = "#000", chordInk = "#
     const y = 10 + li * lineH;
     const stave = new VF.Stave(x, y + 18, w);
     stave.setMeasure(bar.n);
-    if (col === 0) stave.addClef(model.clef, "default", clefAnno).addKeySignature(model.key.vfKey);
+    if (col === 0) stave.addClef(model.clef, "default", clefAnno).addKeySignature(bar.key.vfKey);
+    else if (prevKey && bar.key.vfKey !== prevKey) stave.addKeySignature(bar.key.vfKey, prevKey); // modulation
+    prevKey = bar.key.vfKey;
     if (bar.nb !== prevBeats) stave.addTimeSignature(`${bar.nb}/4`);
     prevBeats = bar.nb;
     stave.setContext(ctx).draw();
     // notes and rests
     const restKey = model.clef === "bass" ? "d/3" : "b/4";
     const notes = bar.items.map((it) => {
-      const n = new VF.StaveNote({ clef: model.clef, keys: [it.midi == null ? restKey : vfKeyOf(model.key, it.midi + model.shift)],
+      const n = new VF.StaveNote({ clef: model.clef, keys: [it.midi == null ? restKey : vfKeyOf(bar.key, it.midi + model.shift)],
         duration: it.dur + (it.midi == null ? "r" : ""), align_center: it.full, auto_stem: true });
       if (it.dots) VF.Dot.buildAndAttach([n], { all: true });
       return n;
     });
     const voice = new VF.Voice({ num_beats: bar.nb, beat_value: 4 }).setMode(VF.Voice.Mode.SOFT).addTickables(notes);
-    VF.Accidental.applyAccidentals([voice], model.key.vfKey);
+    VF.Accidental.applyAccidentals([voice], bar.key.vfKey);
     const beams = VF.Beam.generateBeams(notes, { groups: [new VF.Fraction(1, 4)] });
     new VF.Formatter().joinVoices([voice]).format([voice], Math.max(40, stave.getNoteEndX() - stave.getNoteStartX() - 12));
     voice.draw(ctx, stave);
@@ -257,15 +274,20 @@ export function renderNumbers(box, model, letters, el) {
   const { key } = model;
   const pitched = model.bars.flatMap((b) => b.items.filter((x) => x.midi != null).map((x) => x.midi)).sort((a, b) => a - b);
   const med = pitched.length ? pitched[pitched.length >> 1] : 60;
-  const base = med - mod12(med - key.major); // the octave of do just below the middle note has no dots
+  const baseOf = (k) => med - mod12(med - k.major); // the octave of do just below the middle note has no dots
   const head = el("div", "nb-head");
   head.append(el("b", "", letters ? `Kunci ${pretty(key.label)}` : `do = ${pretty(key.names[key.major])}`), el("span", "", `${model.beats}/4`), el("span", "", `${Math.round(model.bpm)} BPM`));
   const wrap = el("div", "nb-lines");
   const items = [];
+  let prevKey = key;
   model.bars.forEach((bar, bi) => {
     const barEl = el("div", "nb-bar");
     const num = el("span", "nb-num", String(bar.n));
     barEl.append(num);
+    const bk = bar.key, base = baseOf(bk);
+    // modulation: the new key above its first bar
+    if (bk.label !== prevKey.label) barEl.append(el("span", "nb-key", letters ? `Kunci ${pretty(bk.label)}` : `do = ${pretty(bk.names[bk.major])}`));
+    prevKey = bk;
     // slice every piece at the beats; the first slice of a note shows it, the rest are dots
     const beats = Array.from({ length: bar.nb }, () => []);
     for (const it of bar.items) {
@@ -288,12 +310,12 @@ export function renderNumbers(box, model, letters, el) {
         let txt = ".", acc = "", oct = 0;
         if (s.it.midi == null) txt = "0";
         else if (s.show) {
-          const off = mod12(s.it.midi - key.major);
+          const off = mod12(s.it.midi - bk.major);
           if (letters) {
-            const nm = key.names[mod12(s.it.midi)];
+            const nm = bk.names[mod12(s.it.midi)];
             txt = nm[0];
             acc = nm.length > 1 ? (nm[1] === "#" ? "♯" : "♭") : "";
-          } else [txt, acc = ""] = (key.flat ? DEG_FLAT : DEG_SHARP)[off];
+          } else [txt, acc = ""] = (bk.flat ? DEG_FLAT : DEG_SHARP)[off];
           oct = Math.floor((s.it.midi - base) / 12);
         }
         const n = el("span", "nb-n", txt);
@@ -338,12 +360,16 @@ export function toMusicXml(model, title, partName) {
   const { key } = model;
   const clef = model.clef === "bass" ? "<sign>F</sign><line>4</line>" : "<sign>G</sign><line>2</line>";
   const clefOct = model.shift ? "<clef-octave-change>-1</clef-octave-change>" : "";
-  let prevBeats = 0;
+  let prevBeats = 0, prevKey = null;
   const measures = model.bars.map((bar, i) => {
     let x = `<measure number="${i + 1}">`;
-    if (i === 0 || bar.nb !== prevBeats) {
+    const bk = bar.key || key;
+    const newKey = bk.label !== prevKey;
+    prevKey = bk.label;
+    if (i === 0 || bar.nb !== prevBeats || newKey) {
       x += "<attributes>";
-      if (i === 0) x += `<divisions>4</divisions><key><fifths>${key.fifths}</fifths><mode>${key.minor ? "minor" : "major"}</mode></key>`;
+      if (i === 0) x += "<divisions>4</divisions>";
+      if (newKey) x += `<key><fifths>${bk.fifths}</fifths><mode>${bk.minor ? "minor" : "major"}</mode></key>`;
       x += `<time><beats>${bar.nb}</beats><beat-type>4</beat-type></time>`;
       if (i === 0) x += `<clef>${clef}${clefOct}</clef>`;
       x += "</attributes>";
@@ -360,7 +386,7 @@ export function toMusicXml(model, title, partName) {
       x += "<note>";
       if (it.midi == null) x += it.full ? '<rest measure="yes"/>' : "<rest/>";
       else {
-        const nm = key.names[mod12(it.midi)];
+        const nm = bk.names[mod12(it.midi)];
         x += `<pitch><step>${nm[0]}</step>${nm.length > 1 ? `<alter>${nm[1] === "#" ? 1 : -1}</alter>` : ""}<octave>${Math.floor(it.midi / 12) - 1}</octave></pitch>`;
       }
       x += `<duration>${it.len}</duration>`;

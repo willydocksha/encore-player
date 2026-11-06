@@ -200,6 +200,7 @@ def analysis_stage(job_id: str) -> None:
         result = run(DATA / job_id, meta.get("title") or "audio", progress)
         write_meta(job_id, status="done", stage="Selesai", progress=1.0, title=result["title"],
                    duration=result["duration"], key=result["key"], bpm=result["bpm"],
+                   key_label=" → ".join(k["key"] for k in result.get("keys") or []) or result["key"],
                    compute_sec=round(time.time() - started, 1), finished=time.time(),
                    reanalyze_error=None,
                    version=result.get("version"), result_mode=result.get("mode", mode))

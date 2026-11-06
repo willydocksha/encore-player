@@ -592,6 +592,8 @@ div.sheet:not([hidden]) { flex: 1; min-height: 300px; display: flex; flex-direct
 .nb-bar { position: relative; display: flex; align-items: stretch; padding: calc(var(--u) * 1.3) 6px 2px; border-right: 2px solid var(--line); border-radius: 4px; }
 .nb-bar.now { background: var(--bass-soft); }
 .nb-num { position: absolute; left: 4px; bottom: -1.1em; font: 600 .55em var(--f-mono); color: var(--muted); opacity: .7; }
+/* key change marker on the first bar of a modulation */
+.nb-key { position: absolute; right: 4px; bottom: -1.3em; font: 700 .6em var(--f-mono); color: var(--ink); white-space: nowrap; }
 .nb-beat { display: flex; padding: 0 .3em; }
 .nb-it { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-width: 1.05em; padding-top: 10px; cursor: pointer; font: 700 1em var(--f-mono); line-height: 1.15; }
 .nb-it[data-l="1"] { background: linear-gradient(currentColor, currentColor) 0 0 / 100% 1.5px no-repeat; }
@@ -627,7 +629,7 @@ div.sheet:not([hidden]) { flex: 1; min-height: 300px; display: flex; flex-direct
   body.print-score .sheet-body { overflow: visible; padding: 0; }
   body.print-score .score-inner svg path, body.print-score .score-inner svg rect { fill: #000 !important; stroke: #000 !important; }
   body.print-score .score-inner svg text { fill: #000 !important; }
-  body.print-score .nb-it, body.print-score .nb-chord, body.print-score .nb-head b { color: #000 !important; }
+  body.print-score .nb-it, body.print-score .nb-chord, body.print-score .nb-key, body.print-score .nb-head b { color: #000 !important; }
   body.print-score .nb-bar { background: none !important; break-inside: avoid; border-color: #999; }
 }
 .overview { width: 100%; height: 46px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; display: block; }

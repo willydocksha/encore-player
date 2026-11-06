@@ -40,7 +40,7 @@ def main() -> int:
     from pipeline import analyze
 
     result = analyze(Path(sys.argv[2]), sys.argv[3], lambda stage, p: emit(stage=stage, p=round(p, 3)), mode="ai")
-    emit(result={k: result[k] for k in ("title", "duration", "key", "bpm", "version", "mode")})
+    emit(result={k: result[k] for k in ("title", "duration", "key", "keys", "bpm", "version", "mode")})
     return 0
 
 

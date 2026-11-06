@@ -24,7 +24,7 @@ import soundfile as sf
 
 SR = 44100
 # bump when the analysis changes enough that old results are worth redoing
-PIPELINE_VERSION = 9
+PIPELINE_VERSION = 10
 # stems saved for the player mixer, in display order
 STEMS = ("drums", "bass", "vocals", "guitar", "piano", "other")
 NOTE_NAMES_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
@@ -507,6 +507,10 @@ def transcribe_bass(bass_wav: Path, on_progress: Callable[[float], None] | None 
     return notes
 
 
+VOCAL_GATE_SEC = 2.0
+VOCAL_GATE_DB = -20.0  # on a test song: drops half the intro / interlude bleed, keeps 97% of sung notes
+
+
 def transcribe_vocals(vocals_wav: Path, on_progress: Callable[[float], None] | None = None) -> dict:
     """sung melody: notes plus the continuous pitch contour (vibrato, slides) for display."""
     sr, hop, frame = PYIN_SR, PYIN_HOP, PYIN_FRAME
@@ -521,6 +525,10 @@ def transcribe_vocals(vocals_wav: Path, on_progress: Callable[[float], None] | N
     f0, voiced, vprob, rms = f0[:n], voiced[:n], vprob[:n], rms[:n]
     rms_db = librosa.amplitude_to_db(rms, ref=np.max)
     active = voiced & (rms_db > -35) & np.isfinite(f0)
+    # stretches far below the sung level (2 s average) are other instruments leaking into the
+    # vocal stem, e.g. an instrumental intro: no notes there
+    local = scipy.ndimage.uniform_filter1d(rms_db, max(1, int(VOCAL_GATE_SEC / frame_t)))
+    active &= local > np.percentile(rms_db, 95) + VOCAL_GATE_DB
     midi = np.where(active, librosa.hz_to_midi(np.nan_to_num(f0, nan=1.0)), np.nan)
 
     # contour for drawing: light smoothing, ~23 ms resolution
@@ -751,9 +759,100 @@ def detect_beats(mix_wav: Path, ai: bool = True) -> tuple[float, list[float], li
         _, frames = librosa.beat.beat_track(y=y, sr=sr, hop_length=512)
         beats = librosa.frames_to_time(frames, sr=sr, hop_length=512)
         downs = guess_downbeats(y, sr, beats)
-    bpm = 60.0 / float(np.median(np.diff(beats))) if len(beats) > 1 else 0.0
+    else:
+        # beat_this without its dbn misses and doubles beats, and its downbeats jump around
+        beats = regular_beats(beats)
+        downs = bar_grid(beats, downs)
     r = lambda a: [round(float(t), 3) for t in a]
-    return round(bpm, 1), r(beats), r(downs)
+    return round(bpm_of(beats), 1), r(beats), r(downs)
+
+
+def bpm_of(beats: np.ndarray) -> float:
+    """tempo from the mean of the regular beat gaps.
+
+    the median alone is stuck on beat_this's 20 ms frames (0.36 / 0.38 s = 166.7 / 157.9 bpm).
+    """
+    if len(beats) < 2:
+        return 0.0
+    gaps = np.diff(beats)
+    med = float(np.median(gaps))
+    ok = gaps[(gaps > 0.75 * med) & (gaps < 1.33 * med)]
+    return 60.0 / float(ok.mean() if len(ok) else med)
+
+
+def regular_beats(beats: np.ndarray) -> np.ndarray:
+    """drop doubled beats (much closer than one beat) and fill single missed beats inside a steady pulse."""
+    if len(beats) < 4:
+        return beats
+    med = float(np.median(np.diff(beats)))
+    # doubled beats: keep the first of a too-close pair
+    kept = [float(beats[0])]
+    for b in beats[1:]:
+        if b - kept[-1] >= 0.6 * med:
+            kept.append(float(b))
+    # missed beats: a gap of about 2 or 3 beats gets the beats in between
+    out = [kept[0]]
+    for b in kept[1:]:
+        gap = b - out[-1]
+        k = int(round(gap / med))
+        if 2 <= k <= 3 and abs(gap / k - med) < 0.15 * med:
+            out.extend(out[-1] + gap * i / k for i in range(1, k))
+        out.append(b)
+    return np.array(out)
+
+
+def bar_grid(beats: np.ndarray, downs: np.ndarray) -> np.ndarray:
+    """steady bars from noisy downbeat guesses: viterbi over the position of each beat in its bar.
+
+    the meter is the most common bar length; a bar may end early (a real 2/4 bar) only when
+    several downbeats in a row agree, so single wrong guesses don't break the grid.
+    """
+    if len(beats) < 8 or len(downs) < 2:
+        return downs
+    # downbeat evidence per beat
+    hit = np.zeros(len(beats), dtype=bool)
+    for d in downs:
+        j = int(np.argmin(np.abs(beats - d)))
+        if abs(beats[j] - d) < 0.1:
+            hit[j] = True
+    idx = np.flatnonzero(hit)
+    lens = np.diff(idx)
+    lens = lens[(lens >= 2) & (lens <= 7)]
+    if not len(lens):
+        return downs
+    meter = int(np.bincount(lens).argmax())
+    # 2-beat bars are mostly half bars: read them as 4
+    if meter == 2:
+        meter = 4
+    # emissions: a downbeat guess is likely on beat 1, rare elsewhere
+    p_on = np.where(hit, np.log(0.7), np.log(0.3))
+    p_off = np.where(hit, np.log(0.05), np.log(0.95))
+    stay, cut = np.log(0.997), np.log(0.003)
+    n = len(beats)
+    score = np.full(meter, -np.inf)
+    score[0] = p_on[0]
+    score[1:] = p_off[0] + np.log(1.0 / meter)
+    back = np.zeros((n, meter), dtype=np.int16)
+    for i in range(1, n):
+        new = np.full(meter, -np.inf)
+        for pos in range(meter):
+            nxt = (pos + 1) % meter
+            # normal step to the next beat of the bar
+            if score[pos] + stay > new[nxt]:
+                new[nxt] = score[pos] + stay
+                back[i, nxt] = pos
+            # early bar end: jump to beat 1
+            if nxt != 0 and score[pos] + cut > new[0]:
+                new[0] = score[pos] + cut
+                back[i, 0] = pos
+        new += np.where(np.arange(meter) == 0, p_on[i], p_off[i])
+        score = new
+    pos = int(np.argmax(score))
+    path = np.zeros(n, dtype=int)
+    for i in range(n - 1, -1, -1):
+        path[i] = pos
+        pos = back[i, pos]
+    return beats[path == 0]
 
 
 # krumhansl-kessler key profiles
@@ -828,7 +927,96 @@ def bass_reading(c: np.ndarray, root: int, qual: str, bass_pc: int | None) -> tu
     return None
 
 
-def detect_chords(other_wav: Path, bass_wav: Path, beats: list[float], bass_notes: list[dict]) -> tuple[list[dict], str]:
+def chord_viterbi(chroma_n: np.ndarray, silent: np.ndarray, bias: np.ndarray | None = None) -> np.ndarray:
+    """best chord state per frame (24 triads + no chord); bias adds per-frame, per-chord score."""
+    temps, _ = chord_templates()
+    scores = temps @ chroma_n  # (24, frames)
+    if bias is not None:
+        scores = scores + bias
+    # "no chord" state for silent / noisy frames
+    n_score = np.where(silent, 1.0, 0.55)
+    scores = np.vstack([scores, n_score])
+    probs = np.exp(scores * 12)
+    probs /= probs.sum(axis=0, keepdims=True)
+    trans = librosa.sequence.transition_loop(probs.shape[0], 0.97)
+    return librosa.sequence.viterbi_discriminative(probs, trans)
+
+
+# chords of a major key as (interval from tonic, quality); index 0 is the tonic chord
+DIATONIC = ((0, "maj"), (2, "min"), (4, "min"), (5, "maj"), (7, "maj"), (9, "min"))
+KEY_BIAS = 0.05  # score bonus for chords that belong to the local key (scores are ~0.6-0.95)
+KEY_SWITCH = 25.0  # cost of a key change, in seconds of evidence against the old key
+KEY_MIN_SEC = 16.0  # shorter key sections are merged into their neighbours
+
+
+def key_fit(root: int, qual: str) -> np.ndarray:
+    """how well one chord fits each of the 24 keys (0-11 major, 12-23 minor)."""
+    fit = np.full(24, -0.5)
+    for tonic in range(12):
+        for k, (iv, q) in enumerate(DIATONIC):
+            if (tonic + iv) % 12 == root and q == qual:
+                fit[tonic] = 1.0 + (0.5 if k == 0 else 0.2 if k == 4 else 0.0)
+                # the relative minor shares the chords, its own tonic (vi) gets the bonus; its bVII
+                # (the major key's V) says little, a major-key song leaning on vi must stay major
+                rel = 12 + (tonic + 9) % 12
+                fit[rel] = 1.0 + (0.5 if k == 5 else -0.2 if k == 4 else 0.0)
+    # the major V of a minor key (harmonic minor) is strong minor evidence
+    if qual == "maj":
+        fit[12 + (root + 5) % 12] = max(fit[12 + (root + 5) % 12], 1.2)
+    return fit
+
+
+def key_sections(path: np.ndarray, labels: list[tuple[int, str]], frame_t: float) -> list[tuple[int, int]]:
+    """local key per frame from the chord path: viterbi over 24 keys with a cost per change.
+
+    returns [(first frame, key index)] per section; key index 0-11 major, 12-23 minor.
+    """
+    n_state = len(labels)
+    fits = np.array([key_fit(*lab) for lab in labels] + [np.zeros(24)])
+    ev = fits[path] * frame_t  # (frames, 24) evidence in chord-seconds
+    n = len(path)
+    score = ev[0].copy()
+    back = np.zeros((n, 24), dtype=np.int8)
+    for i in range(1, n):
+        best = int(np.argmax(score))
+        switch = score[best] - KEY_SWITCH
+        keep = score >= switch
+        back[i] = np.where(keep, np.arange(24), best)
+        score = np.where(keep, score, switch) + ev[i]
+    k = int(np.argmax(score))
+    keys = np.zeros(n, dtype=int)
+    for i in range(n - 1, -1, -1):
+        keys[i] = k
+        k = back[i, k]
+    # sections, short ones merged into the previous (or next) section
+    secs = [[0, int(keys[0]), 0]]
+    for i in range(1, n):
+        if keys[i] != secs[-1][1]:
+            secs[-1][2] = i
+            secs.append([i, int(keys[i]), 0])
+    secs[-1][2] = n
+    min_frames = KEY_MIN_SEC / frame_t
+    out: list[list[int]] = []
+    for sec in secs:
+        if out and (sec[2] - sec[0] < min_frames or sec[1] == out[-1][1]):
+            out[-1][2] = sec[2]
+        else:
+            out.append(sec)
+    if len(out) > 1 and out[0][2] - out[0][0] < min_frames:
+        out[1][0] = 0
+        out.pop(0)
+    return [(a, k) for a, k, _ in out]
+
+
+def key_name(k: int) -> str:
+    tonic, minor = k % 12, k >= 12
+    names = NOTE_NAMES_FLAT if (tonic, "min" if minor else "maj") in FLAT_KEYS else NOTE_NAMES_SHARP
+    return f"{names[tonic]} {'minor' if minor else 'major'}"
+
+
+def detect_chords(other_wav: Path, bass_wav: Path, beats: list[float],
+                  bass_notes: list[dict]) -> tuple[list[dict], str, list[dict]]:
+    """chords per segment, the song's key, and the key sections [{t, key}] (more than one on a modulation)."""
     sr, hop = 22050, 2048
     y_o, _ = librosa.load(other_wav, sr=sr, mono=True)
     y_b, _ = librosa.load(bass_wav, sr=sr, mono=True)
@@ -840,22 +1028,28 @@ def detect_chords(other_wav: Path, bass_wav: Path, beats: list[float], bass_note
     chroma_h = librosa.feature.chroma_cqt(y=y_o[:n], sr=sr, hop_length=hop, norm=None)
     energy = chroma.sum(axis=0)
     chroma_n = chroma / (np.linalg.norm(chroma, axis=0, keepdims=True) + 1e-9)
-
-    key_tonic, key_mode = detect_key(chroma.mean(axis=1))
-    names = NOTE_NAMES_FLAT if (key_tonic, key_mode) in FLAT_KEYS else NOTE_NAMES_SHARP
-    key_label = f"{names[key_tonic]} {'major' if key_mode == 'maj' else 'minor'}"
-
-    temps, labels = chord_templates()
-    scores = temps @ chroma_n  # (24, frames)
-    # "no chord" state for silent / noisy frames
     silent = energy < (0.05 * np.percentile(energy, 95) + 1e-9)
-    n_score = np.where(silent, 1.0, 0.55)
-    scores = np.vstack([scores, n_score])
+    frame_t = hop / sr
 
-    probs = np.exp(scores * 12)
-    probs /= probs.sum(axis=0, keepdims=True)
-    trans = librosa.sequence.transition_loop(probs.shape[0], 0.97)
-    path = librosa.sequence.viterbi_discriminative(probs, trans)
+    # pass 1: chords alone, read the local key from them
+    _, labels = chord_templates()
+    n_state = len(labels)
+    path = chord_viterbi(chroma_n, silent)
+    sections = key_sections(path, labels, frame_t)
+    if not np.any(path != n_state):
+        # no chords at all: fall back to the chroma key profile
+        tonic, mode = detect_key(chroma.mean(axis=1))
+        sections = [(0, tonic + (12 if mode == "min" else 0))]
+
+    # pass 2: chords that belong to the local key get a small bonus, so a borrowed chord
+    # still wins when the audio clearly says so but noise no longer picks one
+    bias = np.zeros((n_state, chroma.shape[1]))
+    bounds = [a for a, _ in sections[1:]] + [chroma.shape[1]]
+    for (a, k), b in zip(sections, bounds):
+        major_tonic = k % 12 if k < 12 else (k + 3) % 12
+        for iv, q in DIATONIC:
+            bias[labels.index(((major_tonic + iv) % 12, q)), a:b] = KEY_BIAS
+    path = chord_viterbi(chroma_n, silent, bias)
 
     times = librosa.frames_to_time(np.arange(len(path) + 1), sr=sr, hop_length=hop)
     segs: list[dict] = []
@@ -875,18 +1069,33 @@ def detect_chords(other_wav: Path, bass_wav: Path, beats: list[float], bass_note
         for a, b in zip(segs, segs[1:]):
             a["e"] = b["s"]
 
-    # merge very short segments into the previous one
-    min_len = 0.35
+    # merge short segments into the previous one: under 1.5 beats is a passing note, not a chord
+    # (capped so slow songs keep real one-beat chords)
+    beat = float(np.median(np.diff(beat_arr))) if beat_arr is not None and len(beat_arr) > 1 else 0.5
+    min_len = max(0.35, min(1.5 * beat, 0.6))
     cleaned: list[dict] = []
     for sg in segs:
         if cleaned and (sg["e"] - sg["s"] < min_len or cleaned[-1]["state"] == sg["state"]):
             cleaned[-1]["e"] = sg["e"]
         else:
             cleaned.append(dict(sg))
+    # a short first segment joins the next one
+    if len(cleaned) > 1 and cleaned[0]["e"] - cleaned[0]["s"] < min_len:
+        cleaned[1]["s"] = cleaned[0]["s"]
+        cleaned.pop(0)
+
+    # key sections in seconds; chord spelling follows the local key
+    key_list = [{"t": round(float(times[a]), 3), "key": key_name(k)} for a, k in sections]
+    starts = [kl["t"] for kl in key_list]
+
+    def names_at(t: float) -> list[str]:
+        k = sections[max(0, int(np.searchsorted(starts, t + 1e-6)) - 1)][1]
+        tonic, mode = k % 12, ("min" if k >= 12 else "maj")
+        return NOTE_NAMES_FLAT if (tonic, mode) in FLAT_KEYS else NOTE_NAMES_SHARP
 
     out: list[dict] = []
-    n_state = len(labels)
     for sg in cleaned:
+        names = names_at(sg["s"])
         if sg["state"] == n_state:
             label = "N"
         else:
@@ -908,7 +1117,7 @@ def detect_chords(other_wav: Path, bass_wav: Path, beats: list[float], bass_note
             out[-1]["d"] = round(sg["e"] - out[-1]["t"], 3)
             continue
         out.append({"t": round(float(sg["s"]), 3), "d": round(float(sg["e"] - sg["s"]), 3), "label": label})
-    return out, key_label
+    return out, key_list[0]["key"], key_list
 
 
 def dominant_bass_pc(notes: list[dict], s: float, e: float) -> int | None:
@@ -1235,7 +1444,7 @@ def analyze(job_dir: Path, title: str, progress: Progress, mode: str = "ai") -> 
     bpm, beats, downbeats = detect_beats(src_wav, ai=ai)
 
     progress("Deteksi chord & kunci", 0.85)
-    chords, key = detect_chords(stems["harmony"], stems["bass"], beats, notes)
+    chords, key, keys = detect_chords(stems["harmony"], stems["bass"], beats, notes)
 
     progress("Menyiapkan audio player", 0.9)
     for name in STEMS:
@@ -1256,6 +1465,7 @@ def analyze(job_dir: Path, title: str, progress: Progress, mode: str = "ai") -> 
         "duration": round(duration, 3),
         "bpm": bpm,
         "key": key,
+        "keys": keys,
         "beats": beats,
         "downbeats": downbeats,
         "notes": notes,

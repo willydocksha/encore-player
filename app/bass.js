@@ -4,7 +4,7 @@ import { $, $$, el, icon, setIcon, store, fmtTime, fmtDate, fmtAgo, parseLink, t
 import { renderGetApp } from "./getapp.js";
 import { MODES, getMode, setMode, ensureAi } from "./aimode.js";
 import { addToPlaylist } from "./playlist.js";
-import { buildScore, loadVex, renderStaff, renderNumbers, toMusicXml } from "./score.js";
+import { buildScore, keyAt, keysLabel, loadVex, renderStaff, renderNumbers, toMusicXml } from "./score.js";
 
 const SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const FLAT = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
@@ -265,7 +265,7 @@ function songCard(j) {
   const spark = el("canvas", "spark");
   drawSpark(spark, j.id);
   const meta = el("div", "meta");
-  meta.append(el("span", "chip", j.key || "?"), el("span", "chip", `${Math.round(j.bpm || 0)} BPM`), el("span", "chip", fmtTime(j.duration)));
+  meta.append(el("span", "chip", j.key_label || j.key || "?"), el("span", "chip", `${Math.round(j.bpm || 0)} BPM`), el("span", "chip", fmtTime(j.duration)));
   if (j.result_mode === "classic") { const c = el("span", "chip", "cepat"); c.title = "Dianalisis dengan mode cepat (tanpa AI)"; meta.append(c); }
   if (j.outdated) { const c = el("span", "chip warn", "versi lama"); c.title = "Dianalisis dengan algoritma lama. Analisis ulang untuk hasil terbaru."; meta.append(c); }
   card.append(spark, el("div", "t", j.title || "(tanpa judul)"), meta);
@@ -1398,6 +1398,12 @@ const player = (() => {
   }
   const namesFor = (root, minor) => ((minor ? MINOR_FLAT : MAJOR_FLAT).includes(root) ? FLAT : SHARP);
 
+  // spelling for the key sounding at time t (it changes on a modulation), after transposing
+  function namesAt(t) {
+    const [root, mode] = (keyAt(song, t) || "C major").split(" ");
+    return namesFor((((chordRoot(root) ?? 0) + transpose) % 12 + 12) % 12, mode === "minor");
+  }
+
   // shift a chord label (root, quality, optional slash bass) by the current transpose
   function shiftChord(label, names) {
     const m = /^([A-G][#b]?)(.*?)(?:\/([A-G][#b]?))?$/.exec(label);
@@ -1474,7 +1480,7 @@ const player = (() => {
         prev = slot.label;
         if (!changed && si > 0) { if (toks.length) toks.at(-1).span++; return; }
         const tok = el("span", "tok");
-        tok.textContent = slot.label === "N" ? (changed ? "N.C." : "") : shiftChord(slot.label, names);
+        tok.textContent = slot.label === "N" ? (changed ? "N.C." : "") : shiftChord(slot.label, namesAt(slot.t));
         tok.title = tok.textContent;
         if (!changed) tok.classList.add("held");
         if (slot.label !== "N") tok.style.color = chordColor(slot.label, 1);
@@ -1556,7 +1562,7 @@ const player = (() => {
       return o;
     }));
     $("#nowNoteLabel").textContent = scorePart === "vocals" ? "Not vokal" : "Not bass";
-    const model = buildScore(song, scorePart, transpose, (l) => shiftChord(l, names));
+    const model = buildScore(song, scorePart, transpose, (l, t) => shiftChord(l, namesAt(t)));
     const inner = $("#scoreInner");
     $("#scoreCursor").hidden = true;
     let items;
@@ -1676,9 +1682,9 @@ const player = (() => {
     if (k === lastNowKey) return;
     lastNowKey = k;
     // the chord sheet shows chords in the transposed key
-    const fmt = (l) => (part === "chords" && sheet ? shiftChord(l, sheet.names) : l);
-    $("#nowChord").textContent = cur && cur.label !== "N" ? fmt(cur.label) : "–";
-    $("#nextChord").textContent = nxt ? `berikutnya ${fmt(nxt.label)}` : "";
+    const fmt = (c) => (part === "chords" && sheet ? shiftChord(c.label, namesAt(c.t)) : c.label);
+    $("#nowChord").textContent = cur && cur.label !== "N" ? fmt(cur) : "–";
+    $("#nextChord").textContent = nxt ? `berikutnya ${fmt(nxt)}` : "";
     $("#bdNote").textContent = big;
     $("#nowFret").textContent = small;
   }
@@ -1842,7 +1848,7 @@ export async function enterSong(id) {
     if (openId !== id) return;
     $("#songTitle").textContent = data.title;
     document.title = `${data.title} · Encore`;
-    const chips = [el("span", "chip", data.key), el("span", "chip", `${Math.round(data.bpm)} BPM`)];
+    const chips = [el("span", "chip", keysLabel(data)), el("span", "chip", `${Math.round(data.bpm)} BPM`)];
     if (data.analyzed_at) {
       const c = el("span", "chip" + (data.outdated ? " warn" : ""), `Dianalisis ${fmtDate(data.analyzed_at)}${data.outdated ? " · versi lama" : ""}`);
       c.title = data.outdated ? "Algoritma sudah diperbarui sejak analisis ini. Analisis ulang untuk hasil terbaru." : fmtAgo(data.analyzed_at);
