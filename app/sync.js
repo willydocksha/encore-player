@@ -6,7 +6,8 @@ import { store, SYNC_KEYS, toast } from "./core.js";
 
 const ONLINE = "https://encore-player.vercel.app";
 const APP = "http://localhost:8765";
-const onlineSite = location.origin === ONLINE;
+// the dev server (878x) acts like the online site, so its connect button can be checked locally
+const onlineSite = location.origin === ONLINE || /^878\d$/.test(location.port);
 const listeners = new Set();
 let connected = false;
 
@@ -79,9 +80,13 @@ function paintChip() {
   b.hidden = !onlineSite || matchMedia("(pointer: coarse)").matches;
   if (b.hidden || b.dataset.busy) return;
   b.classList.toggle("ghost", connected);
-  b.textContent = connected ? "✓ Sama dengan Encore App" : "Sambungkan ke Encore App";
-  b.title = connected ? "Playlist dan audio di sini dibagi dengan Encore App di komputer ini"
-    : "Samakan playlist dan audio dengan Encore App di komputer ini (app harus sedang jalan)";
+  // connected: just a double check, the text lives in its tooltip
+  if (connected) b.innerHTML = '<svg><use href="#i-checks"/></svg>';
+  else b.textContent = "Sambungkan ke Encore App";
+  b.setAttribute("aria-label", connected ? "Sama dengan Encore App" : "Sambungkan ke Encore App");
+  // connected: instant tooltip on the double check; otherwise a plain title on the link
+  if (connected) { b.dataset.tip = "Centang 2: tersambung dengan Encore App, playlist dan audio di sini sama dengan di app"; b.removeAttribute("title"); }
+  else { delete b.dataset.tip; b.title = "Samakan playlist dan audio dengan Encore App di komputer ini (app harus sedang jalan)"; }
   b.onclick = connected ? null : async () => {
     b.dataset.busy = "1";
     b.disabled = true;
