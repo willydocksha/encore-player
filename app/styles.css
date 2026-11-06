@@ -28,7 +28,7 @@
   --f-display: "Familjen Grotesk", "Helvetica Neue", Arial, sans-serif;
   --f-body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
   --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
-  --nav-w: 236px;
+  --nav-w: 244px;
   --tab-h: 64px;
   color-scheme: light;
 }
@@ -84,13 +84,17 @@ code { font: .85em var(--f-mono); background: var(--surface-2); padding: 1px 5px
   padding: calc(18px + env(safe-area-inset-top, 0px)) 14px 16px;
   border-right: 1px solid var(--line); background: var(--surface);
 }
-.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; padding: 4px 8px 18px; }
+/* brand row: logo on the left, fold toggle on the right */
+.nav-head { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding-bottom: 18px; position: relative; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; padding: 4px; min-width: 0; }
+.nav .nav-fold { flex: none; width: 32px; height: 32px; border-radius: 10px; color: var(--muted); }
+.nav-fold svg { width: 18px; height: 18px; }
 .brand-mark {
   width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center;
   background: linear-gradient(135deg, var(--accent), var(--bass)); color: #fff;
 }
 .brand-text { display: flex; flex-direction: column; font: 700 1.2rem/1.1 var(--f-display); letter-spacing: -.01em; }
-.brand-text small { font: 400 .72rem var(--f-body); color: var(--muted); letter-spacing: 0; margin-top: 2px; }
+.brand-text small { white-space: nowrap; font: 400 .72rem var(--f-body); color: var(--muted); letter-spacing: 0; margin-top: 2px; }
 .nav-item {
   display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px;
   color: var(--ink-2); text-decoration: none; font-weight: 500; border: 0; background: none; cursor: pointer; text-align: left;
@@ -122,7 +126,12 @@ code { font: .85em var(--f-mono); background: var(--surface-2); padding: 1px 5px
   .shell { transition: grid-template-columns .2s ease; }
   .shell.nav-folded { --nav-w: 72px; }
   .nav-folded .nav { padding-left: 12px; padding-right: 12px; }
-  .nav-folded .brand { padding: 4px 0 18px; justify-content: center; }
+  .nav-folded .nav-head { justify-content: center; }
+  .nav-folded .brand { padding: 4px 0; justify-content: center; }
+  /* folded: the toggle sits on top of the logo and shows on hover (or keyboard focus) */
+  .nav-folded .nav .nav-fold { position: absolute; top: 4px; left: 50%; width: 36px; height: 36px; margin-left: -18px; opacity: 0; background: var(--surface-2); color: var(--ink); }
+  .nav-folded .nav-head:hover .nav-fold, .nav-folded .nav-fold:focus-visible { opacity: 1; }
+  .nav-folded .nav-head:hover .brand-mark { opacity: 0; }
   .nav-folded .brand-text, .nav-folded .nav-item > span:not(.nav-badge):not(.nav-eq), .nav-folded .server-text { display: none; }
   .nav-folded .nav-item { justify-content: center; padding: 10px; position: relative; }
   .nav-folded .nav-badge { position: absolute; top: 2px; right: 2px; min-width: 18px; height: 18px; padding: 0 4px; }
@@ -677,9 +686,9 @@ div.sheet:not([hidden]) { flex: 1; min-height: 300px; display: flex; flex-direct
     flex-direction: row; align-items: stretch; justify-content: space-around; gap: 0; padding: 6px 8px env(safe-area-inset-bottom, 0px);
     border-right: 0; border-top: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(12px);
   }
-  .brand, .nav-foot .server { display: none; }
+  .nav-head, .nav-foot .server { display: none; }
   .nav-foot { margin: 0; display: contents; }
-  #shortcutsBtn, #navFold, #quitApp { display: none !important; }
+  #shortcutsBtn, #quitApp { display: none !important; }
   .nav-item { flex: 1; flex-direction: column; gap: 2px; padding: 6px; font-size: .72rem; justify-content: center; position: relative; }
   .nav-item > span:not(.nav-badge):not(.nav-eq) { flex: none; }
   .nav-badge { position: absolute; top: 4px; left: calc(50% + 8px); }

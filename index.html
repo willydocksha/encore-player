@@ -68,10 +68,14 @@
 <div class="shell">
   <!-- sidebar (desktop) / tab bar (phone) -->
   <nav class="nav" aria-label="Navigasi utama">
-    <a class="brand" href="#/">
-      <span class="brand-mark"><svg><use href="#i-bass"/></svg></span>
-      <span class="brand-text">Encore<small>Teman latihan musikmu</small></span>
-    </a>
+    <!-- brand with the fold toggle on its right, like most app sidebars -->
+    <div class="nav-head">
+      <a class="brand" href="#/">
+        <span class="brand-mark"><svg><use href="#i-bass"/></svg></span>
+        <span class="brand-text">Encore<small>Teman latihan musikmu</small></span>
+      </a>
+      <button class="icon-btn nav-fold" type="button" id="navFold" title="Lipat menu" aria-label="Lipat menu" aria-expanded="true"><svg><use href="#i-sidebar"/></svg></button>
+    </div>
     <a class="nav-item" href="#/" data-nav="playlist" title="Playlist">
       <svg><use href="#i-list"/></svg><span>Playlist</span>
       <span class="nav-eq" id="navEq" hidden><i></i><i></i><i></i></span>
@@ -89,7 +93,6 @@
     </a>
     <div class="nav-foot">
       <button class="nav-item ghost" type="button" id="tourBtn" title="Cara pakai Encore"><svg><use href="#i-help"/></svg><span>Cara pakai</span></button>
-      <button class="nav-item ghost" type="button" id="navFold" title="Lipat menu" aria-expanded="true"><svg><use href="#i-sidebar"/></svg><span>Lipat menu</span></button>
       <button class="nav-item ghost" type="button" id="shortcutsBtn" title="Shortcut"><svg><use href="#i-keyboard"/></svg><span>Shortcut</span></button>
       <div class="server" id="serverStatus" title="Status Breakdown">
         <span class="dot"></span><span class="server-text">Memeriksa…</span>

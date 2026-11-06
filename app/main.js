@@ -24,9 +24,10 @@ $("#tourBtn").onclick = () => startTour();
 // fold the sidebar down to icons (desktop), remembered per device
 function setFolded(on) {
   document.querySelector(".shell").classList.toggle("nav-folded", on);
-  $("#navFold").title = on ? "Buka menu" : "Lipat menu";
+  const label = on ? "Buka menu" : "Lipat menu";
+  $("#navFold").title = label;
+  $("#navFold").setAttribute("aria-label", label);
   $("#navFold").setAttribute("aria-expanded", String(!on));
-  $("#navFold span").textContent = on ? "Buka menu" : "Lipat menu";
   store.set("nav-folded", on);
   // canvases size themselves on resize: once now, once after the width animation
   dispatchEvent(new Event("resize"));
