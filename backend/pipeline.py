@@ -24,7 +24,7 @@ import soundfile as sf
 
 SR = 44100
 # bump when the analysis changes enough that old results are worth redoing
-PIPELINE_VERSION = 11
+PIPELINE_VERSION = 12
 # stems saved for the player mixer, in display order
 STEMS = ("drums", "bass", "vocals", "guitar", "piano", "other")
 NOTE_NAMES_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
@@ -1017,7 +1017,7 @@ def key_name(k: int) -> str:
 
 
 def detect_chords(other_wav: Path, bass_wav: Path, beats: list[float],
-                  bass_notes: list[dict]) -> tuple[list[dict], str, list[dict]]:
+                  bass_notes: list[dict], downbeats: list[float] | None = None) -> tuple[list[dict], str, list[dict]]:
     """chords per segment, the song's key, and the key sections [{t, key}] (more than one on a modulation)."""
     sr, hop = 22050, 2048
     y_o, _ = librosa.load(other_wav, sr=sr, mono=True)
@@ -1083,6 +1083,51 @@ def detect_chords(other_wav: Path, bass_wav: Path, beats: list[float],
         for a, b in zip(segs, segs[1:]):
             a["e"] = b["s"]
 
+    # the bass sets the beat of a change: a chord starts on the beat where the bass reaches its
+    # root (pads that push the next chord early wait for it, a quick approach note pulls it in)
+    # runs of one bass pitch (repeated notes count as one), each run is an arrival on that note
+    arrivals: list[list] = []
+    for hs, he, pc in held:
+        if arrivals and arrivals[-1][2] == pc and hs - arrivals[-1][1] <= beat:
+            arrivals[-1][1] = he
+        else:
+            arrivals.append([hs, he, pc])
+    # a run starts at its first note, also a blip too short to hold the harmony
+    blips = sorted((nt["t"], nt["t"] + nt["d"], nt["midi"] % 12) for nt in bass_notes)
+    for r in arrivals:
+        for bs, be, pc in reversed(blips):
+            if pc == r[2] and r[0] - beat < bs < r[0] and be >= r[0] - 0.06:
+                r[0] = bs
+    downs = np.array(downbeats or [])
+    if beat_arr is not None and len(beat_arr) > 1:
+        for a, b in zip(segs, segs[1:]):
+            if b["state"] == n_state:
+                continue
+            # a change already on a bar line stays there (a blip still moves)
+            if b["e"] > b["s"] and downs.size and np.min(np.abs(downs - b["s"])) < 0.05:
+                continue
+            root = labels[b["state"]][0]
+            # a passing note (shorter than about a beat) does not move a change
+            near = [r for r in arrivals if r[2] == root and abs(r[0] - b["s"]) <= 1.3 * beat
+                    and r[1] - r[0] >= 0.65 * beat]
+            if not near:
+                continue
+            on, off, _ = min(near, key=lambda r: abs(r[0] - b["s"]))
+            # the beat the arrival belongs to (a hair early still counts as that beat); a note
+            # pushed ahead of the beat that rings on past it belongs to that next beat
+            j = int(np.searchsorted(beat_arr, on + 0.1)) - 1
+            if j + 1 < len(beat_arr) and on - beat_arr[j] > 0.5 * beat and off - beat_arr[j + 1] >= 0.5 * beat:
+                j += 1
+            if j < 0:
+                continue
+            t = float(beat_arr[j])
+            # stay inside the neighbours (a zero-length blip may only move earlier)
+            if a["s"] < t and (t < b["e"] or t <= b["s"]) and abs(t - b["s"]) <= 1.05 * beat:
+                b["s"] = a["e"] = t
+        segs = [sg for sg in segs if sg["e"] > sg["s"]]
+        for a, b in zip(segs, segs[1:]):
+            a["e"] = b["s"]
+
     # merge short segments into the previous one: under 1.5 beats is a passing note, not a chord
     # (slow songs keep chords of about one beat). a chord of the key on its own bass note is
     # real down to one beat (e.g. g | cmaj7 em7 | d, or a gm7 am7 bbmaj7 walk-up)
@@ -1096,7 +1141,13 @@ def detect_chords(other_wav: Path, bass_wav: Path, beats: list[float],
         if sg["state"] == n_state or ln < min_bassed:
             return False
         f = min(len(bass_at) - 1, int(np.searchsorted(times, (sg["s"] + sg["e"]) / 2)))
-        return bool(in_key[sg["state"], f]) and bass_at[f] == labels[sg["state"]][0]
+        if not in_key[sg["state"], f]:
+            return False
+        # the bass reaches the root early in the segment and stays a while (an eighth-note
+        # walk-up c f | am is a passing note, a g held into the bar line is a chord)
+        root = labels[sg["state"]][0]
+        return any(pc == root and sg["s"] - 0.1 <= s <= sg["s"] + 0.75 * ln and e - s >= 0.65 * beat
+                   for s, e, pc in arrivals) or bass_at[f] == root
 
     cleaned: list[dict] = []
     for sg in segs:
@@ -1499,7 +1550,7 @@ def analyze(job_dir: Path, title: str, progress: Progress, mode: str = "ai") -> 
     bpm, beats, downbeats = detect_beats(src_wav, ai=ai)
 
     progress("Deteksi chord & kunci", 0.85)
-    chords, key, keys = detect_chords(stems["harmony"], stems["bass"], beats, notes)
+    chords, key, keys = detect_chords(stems["harmony"], stems["bass"], beats, notes, downbeats)
 
     progress("Menyiapkan audio player", 0.9)
     for name in STEMS:
