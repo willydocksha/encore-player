@@ -22,7 +22,7 @@ def fingerprint() -> str:
     for name in ("engine.py", "engine.spec", "requirements.txt"):
         h.update((HERE / name).read_bytes().replace(b"\r\n", b"\n"))
     # only the import lines of the analysis code
-    imports = re.findall(r"^\s*((?:from \S+ )?import .+?)\s*(?:#.*)?$", (HERE / "pipeline.py").read_text(), re.M)
+    imports = re.findall(r"^\s*((?:from \S+ )?import .+?)\s*(?:#.*)?$", (HERE / "pipeline.py").read_text(encoding="utf-8"), re.M)
     h.update("\n".join(sorted(set(imports))).encode())
     return h.hexdigest()[:16]
 
