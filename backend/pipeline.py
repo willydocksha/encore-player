@@ -24,7 +24,7 @@ import soundfile as sf
 
 SR = 44100
 # bump when the analysis changes enough that old results are worth redoing
-PIPELINE_VERSION = 10
+PIPELINE_VERSION = 11
 # stems saved for the player mixer, in display order
 STEMS = ("drums", "bass", "vocals", "guitar", "piano", "other")
 NOTE_NAMES_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
@@ -947,6 +947,8 @@ DIATONIC = ((0, "maj"), (2, "min"), (4, "min"), (5, "maj"), (7, "maj"), (9, "min
 KEY_BIAS = 0.05  # score bonus for chords that belong to the local key (scores are ~0.6-0.95)
 KEY_SWITCH = 25.0  # cost of a key change, in seconds of evidence against the old key
 KEY_MIN_SEC = 16.0  # shorter key sections are merged into their neighbours
+BASS_BIAS = 0.1  # score bonus for chords whose root is the bass note sounding then
+BASS_HOLD_BEATS = 4.0  # a short bass note holds the harmony this long after it ends (or until the next note)
 
 
 def key_fit(root: int, qual: str) -> np.ndarray:
@@ -1041,17 +1043,30 @@ def detect_chords(other_wav: Path, bass_wav: Path, beats: list[float],
         tonic, mode = detect_key(chroma.mean(axis=1))
         sections = [(0, tonic + (12 if mode == "min" else 0))]
 
+    beat_arr = np.array(beats) if beats else None
+    beat = float(np.median(np.diff(beat_arr))) if beat_arr is not None and len(beat_arr) > 1 else 0.5
+    times = librosa.frames_to_time(np.arange(chroma.shape[1] + 1), sr=sr, hop_length=hop)
+    held = held_bass(bass_notes, beat)
+    bass_at = bass_frames(held, times[:-1] + frame_t / 2)
+
     # pass 2: chords that belong to the local key get a small bonus, so a borrowed chord
-    # still wins when the audio clearly says so but noise no longer picks one
+    # still wins when the audio clearly says so but noise no longer picks one.
+    # the bass decides where a chord changes: cmaj7 and em7 share three notes, only the
+    # bass moving from c to e tells them apart
     bias = np.zeros((n_state, chroma.shape[1]))
+    in_key = np.zeros((n_state + 1, chroma.shape[1]), dtype=bool)
     bounds = [a for a, _ in sections[1:]] + [chroma.shape[1]]
     for (a, k), b in zip(sections, bounds):
         major_tonic = k % 12 if k < 12 else (k + 3) % 12
         for iv, q in DIATONIC:
-            bias[labels.index(((major_tonic + iv) % 12, q)), a:b] = KEY_BIAS
+            st = labels.index(((major_tonic + iv) % 12, q))
+            bias[st, a:b] = KEY_BIAS
+            in_key[st, a:b] = True
+            # bass bonus only for chords of the key: a wrong bass note must not invent a foreign chord
+            on_root = np.flatnonzero(bass_at[a:b] == (major_tonic + iv) % 12) + a
+            bias[st, on_root] += BASS_BIAS
     path = chord_viterbi(chroma_n, silent, bias)
 
-    times = librosa.frames_to_time(np.arange(len(path) + 1), sr=sr, hop_length=hop)
     segs: list[dict] = []
     for i, st in enumerate(path):
         if segs and segs[-1]["state"] == st:
@@ -1060,7 +1075,6 @@ def detect_chords(other_wav: Path, bass_wav: Path, beats: list[float],
             segs.append({"state": int(st), "s": times[i], "e": times[i + 1]})
 
     # snap boundaries to nearby beats
-    beat_arr = np.array(beats) if beats else None
     if beat_arr is not None and len(beat_arr):
         for sg in segs[1:]:
             j = np.argmin(np.abs(beat_arr - sg["s"]))
@@ -1070,17 +1084,28 @@ def detect_chords(other_wav: Path, bass_wav: Path, beats: list[float],
             a["e"] = b["s"]
 
     # merge short segments into the previous one: under 1.5 beats is a passing note, not a chord
-    # (capped so slow songs keep real one-beat chords)
-    beat = float(np.median(np.diff(beat_arr))) if beat_arr is not None and len(beat_arr) > 1 else 0.5
-    min_len = max(0.35, min(1.5 * beat, 0.6))
+    # (slow songs keep chords of about one beat). a chord of the key on its own bass note is
+    # real down to one beat (e.g. g | cmaj7 em7 | d, or a gm7 am7 bbmaj7 walk-up)
+    min_len = max(0.35, min(1.5 * beat, max(0.6, 0.9 * beat)))
+    min_bassed = max(0.3, 0.8 * beat)
+
+    def keep(sg: dict) -> bool:
+        ln = sg["e"] - sg["s"]
+        if ln >= min_len:
+            return True
+        if sg["state"] == n_state or ln < min_bassed:
+            return False
+        f = min(len(bass_at) - 1, int(np.searchsorted(times, (sg["s"] + sg["e"]) / 2)))
+        return bool(in_key[sg["state"], f]) and bass_at[f] == labels[sg["state"]][0]
+
     cleaned: list[dict] = []
     for sg in segs:
-        if cleaned and (sg["e"] - sg["s"] < min_len or cleaned[-1]["state"] == sg["state"]):
+        if cleaned and (not keep(sg) or cleaned[-1]["state"] == sg["state"]):
             cleaned[-1]["e"] = sg["e"]
         else:
             cleaned.append(dict(sg))
     # a short first segment joins the next one
-    if len(cleaned) > 1 and cleaned[0]["e"] - cleaned[0]["s"] < min_len:
+    if len(cleaned) > 1 and not keep(cleaned[0]):
         cleaned[1]["s"] = cleaned[0]["s"]
         cleaned.pop(0)
 
@@ -1088,8 +1113,11 @@ def detect_chords(other_wav: Path, bass_wav: Path, beats: list[float],
     key_list = [{"t": round(float(times[a]), 3), "key": key_name(k)} for a, k in sections]
     starts = [kl["t"] for kl in key_list]
 
+    def key_at(t: float) -> int:
+        return sections[max(0, int(np.searchsorted(starts, t + 1e-6)) - 1)][1]
+
     def names_at(t: float) -> list[str]:
-        k = sections[max(0, int(np.searchsorted(starts, t + 1e-6)) - 1)][1]
+        k = key_at(t)
         tonic, mode = k % 12, ("min" if k >= 12 else "maj")
         return NOTE_NAMES_FLAT if (tonic, mode) in FLAT_KEYS else NOTE_NAMES_SHARP
 
@@ -1103,10 +1131,16 @@ def detect_chords(other_wav: Path, bass_wav: Path, beats: list[float],
             f0 = int(np.searchsorted(times, sg["s"]))
             f1 = max(f0 + 1, int(np.searchsorted(times, sg["e"])))
             c = chroma_h[:, f0:f1].mean(axis=1)
-            bass_pc = dominant_bass_pc(bass_notes, sg["s"], sg["e"])
+            bass_pc = dominant_bass_pc(held, sg["s"], sg["e"])
             alt = bass_reading(c, root, qual, bass_pc)
             if alt:
                 root, qual = alt
+            # a minor chord on the 7th degree of a major key is the v chord over its third
+            # (e - b/d# - c#m walk-down): b and d#m share d# and f#
+            k = key_at(sg["s"])
+            if k < 12 and qual == "min" and root == (k + 11) % 12 and bass_pc in (None, root):
+                root, qual = (k + 7) % 12, "maj"
+                bass_pc = (k + 11) % 12
             suffix = chord_extension(c, root, qual)
             label = names[root] + suffix
             third = (root + (3 if qual == "min" else 4)) % 12
@@ -1120,12 +1154,33 @@ def detect_chords(other_wav: Path, bass_wav: Path, beats: list[float],
     return out, key_list[0]["key"], key_list
 
 
-def dominant_bass_pc(notes: list[dict], s: float, e: float) -> int | None:
+def held_bass(notes: list[dict], beat: float) -> list[tuple[float, float, int]]:
+    """bass notes as the harmony hears them: each one lasts until the next note (short, staccato
+    playing still holds the chord), up to BASS_HOLD_BEATS past its own end. blips are skipped."""
+    ns = sorted((nt for nt in notes if nt["d"] >= 0.08), key=lambda nt: nt["t"])
+    out = []
+    for i, nt in enumerate(ns):
+        end = nt["t"] + nt["d"] + BASS_HOLD_BEATS * beat
+        if i + 1 < len(ns):
+            end = min(end, ns[i + 1]["t"])
+        out.append((nt["t"], max(end, nt["t"] + nt["d"]), nt["midi"] % 12))
+    return out
+
+
+def bass_frames(held: list[tuple[float, float, int]], t: np.ndarray) -> np.ndarray:
+    """pitch class of the held bass note at each time, -1 where none."""
+    pcs = np.full(len(t), -1)
+    for s, e, pc in held:
+        pcs[(t >= s) & (t < e)] = pc
+    return pcs
+
+
+def dominant_bass_pc(held: list[tuple[float, float, int]], s: float, e: float) -> int | None:
     weights = np.zeros(12)
-    for nt in notes:
-        ov = min(e, nt["t"] + nt["d"]) - max(s, nt["t"])
+    for a, b, pc in held:
+        ov = min(e, b) - max(s, a)
         if ov > 0:
-            weights[nt["midi"] % 12] += ov
+            weights[pc] += ov
     if weights.sum() < 0.25 * (e - s):
         return None
     return int(np.argmax(weights))
