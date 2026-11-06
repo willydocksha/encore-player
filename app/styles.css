@@ -193,6 +193,8 @@ h3 { font-size: .95rem; font-weight: 600; }
 .btn.ghost { background: transparent; border-color: transparent; }
 .btn.ghost:hover { background: var(--surface-2); }
 .btn.danger { color: var(--danger); }
+/* destructive primary action: solid red instead of red text on blue */
+.btn.primary.danger { background: var(--danger); border-color: var(--danger); color: #fff; box-shadow: 0 4px 14px color-mix(in srgb, var(--danger) 30%, transparent); }
 .btn.sm { min-height: 32px; padding: 5px 11px; font-size: .85rem; }
 .btn svg { width: 18px; height: 18px; }
 .icon-btn {
@@ -467,6 +469,13 @@ kbd { font: .74rem var(--f-mono); border: 1px solid var(--line); border-bottom-w
 .get-steps h3 { font-size: 1rem; margin: 2px 0 4px; }
 .get-steps p { margin: 0; font-size: .88rem; color: var(--ink-2); line-height: 1.55; }
 .get-num { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font: 700 .9rem var(--f-display); background: var(--bass); color: #fff; }
+/* first-open steps shown after a download click */
+.get-dsteps { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.get-dsteps li { display: flex; gap: 12px; align-items: flex-start; font-size: .92rem; color: var(--ink-2); line-height: 1.5; }
+.get-dsteps li b { color: var(--ink); }
+.get-dsteps .get-num { width: 26px; height: 26px; font-size: .82rem; }
+.sheet-inner > p.get-dnote { font-size: .82rem; color: var(--muted); background: var(--surface-2); padding: 10px 12px; border-radius: 10px; }
+#getDialog .btn.primary { background: var(--bass); border-color: var(--bass); color: #fff; }
 .get-perks { display: flex; flex-wrap: wrap; gap: 8px; }
 .get-perks span { display: inline-flex; align-items: center; gap: 8px; font-size: .84rem; color: var(--ink-2); background: var(--surface); border: 1px solid var(--line); padding: 7px 12px; border-radius: 99px; }
 .get-perks svg { width: 16px; height: 16px; color: var(--bass); }
