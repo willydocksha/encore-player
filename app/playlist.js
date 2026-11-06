@@ -106,7 +106,7 @@ function addLinks(replace) {
   const text = $("#links").value;
   const { ok, bad, name } = extract(text);
   if (!ok.length) return;
-  if (replace) { stop(); list = []; idx = -1; cur = null; history = []; }
+  if (replace) { stop(); list = []; idx = -1; cur = null; history = []; played = new Set(); }
   const wasEmpty = !list.length;
   if (wasEmpty) setName(name);
   list.push(...ok);
@@ -446,8 +446,9 @@ function ytTitle() {
 function markBad(text) {
   if (!cur) return;
   cur.bad = true; save(); renderQueue();
-  showMsg(text + (autonext && list.length > 1 ? " Lanjut ke lagu berikutnya…" : ""));
-  if (autonext && list.length > 1) setTimeout(() => nextTrack(true), 2500);
+  showMsg(text + ((autonext || repeat === "all") && list.length > 1 && list.some((x) => !x.bad) ? " Lanjut ke lagu berikutnya…" : ""));
+  // skip only while some other song can still play, otherwise repeat all would loop forever
+  if ((autonext || repeat === "all") && list.length > 1 && list.some((x) => !x.bad)) setTimeout(() => nextTrack(true), 2500);
 }
 audio.onerror = () => { if (audio.getAttribute("src")) markBad('Audio Drive tidak bisa diputar. Pastikan file dibagikan "Siapa saja yang memiliki link" dan berupa audio, lalu salin ulang link-nya dari tombol Bagikan.'); };
 audio.onplaying = () => { eqWake(); if (cur) cur.bad = false; media.claim("playlist"); renderQueue(); };
@@ -456,17 +457,30 @@ audio.onended = onEnded;
 
 function onEnded() {
   if (repeat === "one") { P.seek(0); P.play(); return; }
-  if (autonext) nextTrack(true);
+  // repeat all keeps the playlist going even when auto next is off
+  if (autonext || repeat === "all") nextTrack(true);
 }
+// songs already played in this shuffle round, so shuffle plays each song once before repeating
+let played = new Set();
 function pickNext() {
   if (!list.length) return -1;
-  if (shuffle && list.length > 1) { let j; do j = Math.floor(Math.random() * list.length); while (j === idx); return j; }
+  if (shuffle && list.length > 1) {
+    played.add(idx);
+    let left = list.map((_, i) => i).filter((i) => !played.has(i));
+    if (!left.length) {
+      if (repeat !== "all") return -1;
+      // new round: everything except the current song is available again
+      played = new Set([idx]);
+      left = list.map((_, i) => i).filter((i) => i !== idx);
+    }
+    return left[Math.floor(Math.random() * left.length)];
+  }
   if (idx + 1 < list.length) return idx + 1;
   return repeat === "all" ? 0 : -1;
 }
 function nextTrack(auto = false) {
   const j = pickNext();
-  if (j < 0) { if (auto) { stop(); showMsg("Playlist selesai."); } else if (list.length) playIndex(0, true); return; }
+  if (j < 0) { played = new Set(); if (auto) { stop(); showMsg("Playlist selesai."); } else if (list.length) playIndex(0, true); return; }
   playIndex(j, true);
 }
 function prevTrack() {
@@ -508,7 +522,7 @@ const cycleRepeat = () => {
   toast({ off: "Tanpa ulang", one: "Ulang 1 lagu", all: "Ulang semua" }[repeat], { ms: 1500 });
 };
 $("#repeat").onclick = cycleRepeat;
-$("#shuffle").onclick = () => { shuffle = !shuffle; history = []; paintModes(); };
+$("#shuffle").onclick = () => { shuffle = !shuffle; history = []; played = new Set(); paintModes(); };
 $("#autonext").onclick = () => { autonext = !autonext; paintModes(); };
 
 function applyRate(r) {
