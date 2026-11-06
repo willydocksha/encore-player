@@ -44,6 +44,8 @@ initTuner();
 store.booting = false;
 // the bass pages depend on the local server, so learn whether it is there before routing
 server.check().then(() => { router.resolve(); maybeStartTour(); });
+// each page shows its own tour the first time it is opened
+addEventListener("hashchange", () => maybeStartTour());
 
 // encore app: newer ui from the online site, applied with a reload
 checkUiUpdate();
