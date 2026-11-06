@@ -24,6 +24,54 @@ const OPEN_TIP = {
   linux: "Extract, lalu jalankan ./Encore di folder Encore. Encore terbuka sendiri di browser.",
 };
 
+// the steps shown right after a download click: what to expect the first time it opens
+const FIRST_OPEN = {
+  mac: {
+    lead: "Encore belum bisa langsung diklik dua kali. Karena app ini gratis dan tidak terdaftar di Apple, macOS minta konfirmasi dulu:",
+    steps: [
+      "Buka <b>Encore-macOS.dmg</b> dari folder Downloads, lalu seret <b>Encore</b> ke folder <b>Applications</b>.",
+      "Buka Encore dari Applications. Muncul peringatan <i>\"Encore\" Not Opened</i>? Klik <b>Done</b>, jangan Move to Trash.",
+      "Buka <b>System Settings → Privacy &amp; Security</b>, gulir ke bawah, klik <b>Open Anyway</b> di samping Encore, lalu masukkan password Mac-mu.",
+    ],
+    note: "Cukup sekali. Setelah itu Encore terbuka seperti app biasa. Saat ganti ke versi baru, langkah 2–3 bisa muncul lagi.",
+  },
+  windows: {
+    lead: "Karena app ini gratis dan tidak terdaftar di Microsoft, Windows minta konfirmasi dulu saat pertama dibuka:",
+    steps: [
+      "Klik kanan <b>Encore-Windows.zip</b> di folder Downloads → <b>Extract All</b>.",
+      "Buka folder hasil extract, lalu klik dua kali <b>Encore.exe</b>.",
+      "Muncul layar biru <i>Windows protected your PC</i>? Klik <b>More info → Run anyway</b>.",
+    ],
+    note: "Cukup sekali. Setelah itu Encore terbuka seperti app biasa.",
+  },
+  linux: {
+    lead: "Setelah download selesai:",
+    steps: [
+      "Extract <b>Encore-Linux.tar.gz</b>.",
+      "Buka terminal di folder <b>Encore</b>, lalu jalankan <b>./Encore</b>.",
+      "Encore terbuka sendiri di browser. Biarkan terminalnya jalan selama dipakai.",
+    ],
+    note: "",
+  },
+};
+
+// show the first-open steps for this build (the download itself keeps going)
+function showFirstOpen(os) {
+  const info = FIRST_OPEN[os];
+  $("#getDialogLead").textContent = info.lead;
+  $("#getDialogSteps").replaceChildren(...info.steps.map((html, i) => {
+    const li = el("li");
+    const p = el("span");
+    p.innerHTML = html;
+    li.append(el("span", "get-num", String(i + 1)), p);
+    return li;
+  }));
+  const note = $("#getDialogNote");
+  note.textContent = info.note;
+  note.hidden = !info.note;
+  $("#getDialog").showModal();
+}
+
 export function renderGetApp() {
   renderSync();
   const os = guessOs();
@@ -32,6 +80,7 @@ export function renderGetApp() {
   if (os) {
     main.hidden = false;
     main.href = fileUrl(os);
+    main.onclick = () => showFirstOpen(os);
     main.querySelector("span").textContent = `Download untuk ${APP_FILES[os].label}`;
     $("#getNeed").textContent = APP_FILES[os].need;
     $("#getOpenTip").textContent = OPEN_TIP[os];
@@ -44,6 +93,7 @@ export function renderGetApp() {
     const a = el("a", null, APP_FILES[k].label);
     a.href = fileUrl(k);
     a.title = APP_FILES[k].need;
+    a.onclick = () => showFirstOpen(k);
     return a;
   });
   const out = [os ? "Pakai komputer lain? " : ""];

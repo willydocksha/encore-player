@@ -591,6 +591,22 @@ https://youtu.be/…"></textarea>
   </form>
 </dialog>
 
+<!-- after clicking download: the first-open steps, since the app is not signed -->
+<dialog class="sheet small" id="getDialog">
+  <form method="dialog" class="sheet-inner">
+    <header class="sheet-head">
+      <h2><svg class="title-icon"><use href="#i-download"/></svg>Download dimulai</h2>
+      <button class="icon-btn" value="cancel" aria-label="Tutup"><svg><use href="#i-x"/></svg></button>
+    </header>
+    <p id="getDialogLead"></p>
+    <ol class="get-dsteps" id="getDialogSteps"></ol>
+    <p class="get-dnote" id="getDialogNote"></p>
+    <footer class="sheet-foot">
+      <button class="btn primary" value="ok">Oke, mengerti</button>
+    </footer>
+  </form>
+</dialog>
+
 <!-- confirm -->
 <dialog class="sheet small" id="confirm">
   <form method="dialog" class="sheet-inner">
