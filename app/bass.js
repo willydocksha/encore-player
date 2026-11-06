@@ -276,7 +276,9 @@ function songCard(j) {
   const spark = el("canvas", "spark");
   drawSpark(spark, j.id);
   const meta = el("div", "meta");
-  meta.append(el("span", "chip", j.key_label || j.key || "?"), el("span", "chip", `${Math.round(j.bpm || 0)} BPM`), el("span", "chip", fmtTime(j.duration)));
+  const key = el("span", "chip key", j.key_label || j.key || "?");
+  key.title = key.textContent;
+  meta.append(key, el("span", "chip", `${Math.round(j.bpm || 0)} BPM`), el("span", "chip", fmtTime(j.duration)));
   if (j.result_mode === "classic") { const c = el("span", "chip", "cepat"); c.title = "Dianalisis dengan mode cepat (tanpa AI)"; meta.append(c); }
   if (j.outdated) { const c = el("span", "chip warn", "versi lama"); c.title = "Dianalisis dengan algoritma lama. Analisis ulang untuk hasil terbaru."; meta.append(c); }
   card.append(spark, el("div", "t", j.title || "(tanpa judul)"), meta);
