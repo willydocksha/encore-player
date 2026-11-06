@@ -533,6 +533,23 @@ kbd { font: .74rem var(--f-mono); border: 1px solid var(--line); border-bottom-w
 .job-sub { font-size: .8rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 2px; }
 .busy-warn { margin: 0 0 10px; padding: 10px 12px; border-radius: 10px; font-size: .84rem; line-height: 1.4; color: var(--loop); background: var(--loop-soft); border: 1px solid color-mix(in srgb, var(--loop) 45%, transparent); }
 .job-sub .err { color: var(--danger); }
+/* mode badge on a queue row */
+.job-mode { display: inline-flex; align-items: center; gap: 4px; padding: 0 7px; border-radius: 999px; border: 1px solid var(--line); line-height: 1.5; }
+.job-mode svg { width: 12px; height: 12px; }
+.job-mode.ai { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+
+/* mode picker dialog */
+.mode-song { margin: 0 0 12px; color: var(--muted); font-size: .88rem; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.mode-opts { display: grid; gap: 10px; }
+.mode-opt {
+  display: flex; align-items: flex-start; gap: 12px; padding: 14px; text-align: left; cursor: pointer; font: inherit; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; transition: border-color .15s, background .15s;
+}
+.mode-opt:hover, .mode-opt:focus-visible { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--surface)); outline: none; }
+.mode-opt.last { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.mode-opt > svg { width: 20px; height: 20px; flex: none; margin-top: 2px; color: var(--accent); }
+.mode-opt b { display: block; font-weight: 600; }
+.mode-opt small { display: block; margin-top: 3px; color: var(--muted); font-size: .82rem; line-height: 1.4; }
 .job-acts { display: flex; gap: 6px; align-items: center; }
 
 .lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }

@@ -2,13 +2,33 @@
 
 import { $, store, server } from "./core.js";
 
-export const MODES = {
-  classic: "Mode cepat: tanpa AI, sekitar 1 menit per lagu. Drum, bass, vokal, dan lainnya (gitar & piano belum dipisah).",
-  ai: "Mode detail: AI memisahkan 6 instrumen dan membaca not lebih akurat. Beberapa menit per lagu.",
-};
-
 export const getMode = () => (store.get("bd-mode", "classic") === "ai" && server.ai?.installed ? "ai" : "classic");
 export const setMode = (m) => store.set("bd-mode", m);
+
+// short labels for chips
+export const MODE_LABEL = { classic: "Cepat", ai: "Detail (AI)" };
+
+// ask which mode to use for one song; resolves "classic" | "ai", or null when closed
+export async function pickMode(title) {
+  const d = $("#modeDialog");
+  $("#modeSong").textContent = title || "";
+  $("#modeSong").hidden = !title;
+  $("#modeAiNote").textContent = server.ai?.installed
+    ? "6 instrumen terpisah, not lebih akurat. Beberapa menit per lagu."
+    : "6 instrumen terpisah, not lebih akurat. Perlu download mesin AI sekali dulu.";
+  // last choice gets the primary look and keyboard focus
+  const last = getMode();
+  d.querySelectorAll(".mode-opt").forEach((b) => b.classList.toggle("last", b.value === last));
+  d.returnValue = "";
+  d.showModal();
+  d.querySelector(`.mode-opt[value="${last}"]`).focus();
+  const m = await new Promise((resolve) => d.addEventListener("close", () => resolve(d.returnValue), { once: true }));
+  if (m !== "classic" && m !== "ai") return null;
+  // detail needs the engine; installing it can be cancelled
+  if (m === "ai" && !(await ensureAi())) return null;
+  setMode(m);
+  return m;
+}
 
 async function aiStatus() {
   try {

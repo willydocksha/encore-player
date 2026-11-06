@@ -2,7 +2,7 @@
 
 import { $, $$, el, icon, setIcon, store, fmtTime, fmtDate, fmtAgo, parseLink, toast, confirmDialog, showMenu, server, media, router, onKeys, api } from "./core.js";
 import { renderGetApp } from "./getapp.js";
-import { MODES, getMode, setMode, ensureAi } from "./aimode.js";
+import { MODE_LABEL, pickMode, ensureAi } from "./aimode.js";
 import { addToPlaylist } from "./playlist.js";
 import { buildScore, keyAt, keysLabel, loadVex, renderStaff, renderNumbers, toMusicXml } from "./score.js";
 
@@ -102,10 +102,13 @@ export async function submitLink(url, title) {
     toast("Link YouTube belum bisa diproses. Upload file audionya atau pakai link Google Drive.", { error: true, ms: 7000 });
     return false;
   }
+  // ask the mode for this song only
+  const mode = await pickMode(title || url);
+  if (!mode) return false;
   const fd = new FormData();
   fd.append("kind", p.type === "yt" ? "youtube" : "gdrive");
   fd.append("url", url);
-  fd.append("mode", getMode());
+  fd.append("mode", mode);
   try {
     const job = await api("/api/jobs", { method: "POST", body: fd });
     if (job.existing && job.status === "done") {
@@ -130,10 +133,13 @@ async function uploadFile(file) {
     toast("Itu bukan file audio", { error: true });
     return;
   }
+  // ask the mode for this song only
+  const mode = await pickMode(file.name);
+  if (!mode) return;
   const fd = new FormData();
   fd.append("kind", "file");
   fd.append("file", file);
-  fd.append("mode", getMode());
+  fd.append("mode", mode);
   try {
     const job = await api("/api/jobs", { method: "POST", body: fd });
     toast(`Masuk antrian: ${file.name}${job.status === "pending" ? ". Klik Mulai untuk memproses" : ""}`);
@@ -214,6 +220,11 @@ function queueRow(j) {
   const sub = el("div", "job-sub");
   const pct = Math.round((j.progress || 0) * 100);
   sub.append(el("span", null, SRC[j.source_type] || ""));
+  // which mode this song runs with
+  const m = j.mode === "ai" ? "ai" : "classic";
+  const mc = el("span", `job-mode ${m}`);
+  mc.append(icon(m === "ai" ? "sparkle" : "bolt"), MODE_LABEL[m]);
+  sub.append(mc);
   if (j.status === "running") sub.append(el("span", null, `${j.stage} · ${pct}%`), el("span", null, `selesai ${fmtEta(j.eta_sec || 0)}`));
   else if (j.status === "downloading") sub.append(el("span", null, `Mengunduh ${pct}%`));
   else if (j.status === "error") sub.append(el("span", "err", j.error || "gagal"));
@@ -305,13 +316,6 @@ async function upgradeAi(j) {
     toast("Masuk antrian mode detail (AI). Hasil cepat tetap bisa dipakai sampai selesai.", { action: "Lihat", onAction: () => router.go("#/breakdown") });
   } catch (ex) { toast(ex.message, { error: true }); }
   poll();
-}
-
-// the cepat / detail (ai) switch above the library
-function paintMode() {
-  const mode = getMode();
-  $$("#modeSeg button").forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));
-  $("#dropHint").textContent = `${MODES[mode]} Tarik file audio ke sini untuk menambah lagu.`;
 }
 
 async function removeSong(j) {
@@ -1825,7 +1829,6 @@ export function enterBassHome() {
   openId = null;
   document.title = "Breakdown · Encore";
   $("#urlInput").placeholder = "Tempel link YouTube atau Google Drive…";
-  paintMode();
   $("#jobForm").hidden = !server.analysis;
   $("#modeRow").hidden = !server.analysis;
   // web version: show where to get the app
@@ -1935,13 +1938,6 @@ export function initBass() {
     enterBassHome();
     if (!server.bass) toast("Encore App belum terdeteksi di halaman ini. Kalau app-nya sudah jalan, buka localhost:8765.");
   };
-  $$("#modeSeg button").forEach((b) => {
-    b.onclick = async () => {
-      if (b.dataset.mode === "ai" && !(await ensureAi())) return;
-      setMode(b.dataset.mode);
-      paintMode();
-    };
-  });
   $("#quitApp").onclick = async () => {
     if (!(await confirmDialog("Tutup Encore App?", "Lagu yang sedang diproses akan dilanjutkan saat Encore dibuka lagi.", { ok: "Tutup" }))) return;
     try { await fetch("/api/quit", { method: "POST" }); } catch { /* already gone */ }

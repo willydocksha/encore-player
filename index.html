@@ -281,11 +281,7 @@
           <button class="btn primary" type="submit" id="submitBtn"><svg><use href="#i-plus"/></svg><span>Analisis</span></button>
         </form>
         <div class="mode-row" id="modeRow">
-          <div class="seg" id="modeSeg" role="radiogroup" aria-label="Mode analisis">
-            <button type="button" data-mode="classic" class="active" title="Tanpa AI, cepat, langsung bisa dipakai"><svg><use href="#i-bolt"/></svg>Cepat</button>
-            <button type="button" data-mode="ai" title="Pakai mesin AI: 6 instrumen, hasil lebih bersih"><svg><use href="#i-sparkle"/></svg>Detail (AI)</button>
-          </div>
-          <p class="drop-hint" id="dropHint">atau tarik file audio ke mana saja di halaman ini</p>
+          <p class="drop-hint" id="dropHint">Tempel link atau tarik file audio ke mana saja di halaman ini. Mode cepat atau detail dipilih per lagu.</p>
         </div>
 
         <section class="block" id="queueSection" hidden>
@@ -588,6 +584,27 @@ https://youtu.be/…"></textarea>
       <button class="btn" value="cancel" id="aiLater">Nanti saja</button>
       <button class="btn primary" type="button" id="aiInstall"><svg><use href="#i-download"/></svg>Download mesin AI</button>
     </footer>
+  </form>
+</dialog>
+
+<!-- per-song breakdown mode, asked every time a song is added -->
+<dialog class="sheet small" id="modeDialog">
+  <form method="dialog" class="sheet-inner">
+    <header class="sheet-head">
+      <h2>Pakai mode apa?</h2>
+      <button class="icon-btn" value="cancel" aria-label="Tutup"><svg><use href="#i-x"/></svg></button>
+    </header>
+    <p class="mode-song" id="modeSong"></p>
+    <div class="mode-opts">
+      <button class="mode-opt" value="classic">
+        <svg><use href="#i-bolt"/></svg>
+        <span><b>Cepat</b><small>Tanpa AI, sekitar 1 menit. Drum, bass, vokal, dan lainnya (gitar &amp; piano belum dipisah).</small></span>
+      </button>
+      <button class="mode-opt" value="ai">
+        <svg><use href="#i-sparkle"/></svg>
+        <span><b>Detail (AI)</b><small id="modeAiNote">6 instrumen terpisah, not lebih akurat. Beberapa menit per lagu.</small></span>
+      </button>
+    </div>
   </form>
 </dialog>
 
