@@ -48,6 +48,15 @@ export const store = {
   booting: true, // main.js clears it once the page is ready
 };
 
+// whether a single-line element's text is wider than its box (scrollWidth rounds away sub-pixel overflow)
+export function textOverflows(e) {
+  const r = document.createRange();
+  r.selectNodeContents(e);
+  const cs = getComputedStyle(e);
+  // fractional box width: clientWidth is rounded, which hides a sub-pixel squeeze
+  const side = ["paddingLeft", "paddingRight", "borderLeftWidth", "borderRightWidth"].reduce((a, k) => a + parseFloat(cs[k]), 0);
+  return r.getBoundingClientRect().width > e.getBoundingClientRect().width - side;
+}
 export const fmtTime = (t) => {
   t = Math.max(0, Math.floor(t || 0));
   const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;

@@ -463,6 +463,28 @@ def get_analysis(job_id: str):
     return data
 
 
+@app.get("/api/sections/{key}")
+def get_sections(key: str):
+    """song parts for a playlist song (key yt_<video id> / gd_<drive id>), when it was broken down."""
+    if not re.fullmatch(r"(yt|gd)_[A-Za-z0-9._-]{10,}", key):
+        raise HTTPException(400)
+    kind = "youtube" if key.startswith("yt_") else "gdrive"
+    # newest finished breakdown of the same video / drive file
+    for m in sorted(all_meta(), key=lambda m: m.get("created", 0), reverse=True):
+        src = m.get("source") or {}
+        if src.get("type") != kind or source_key(src) != key:
+            continue
+        p = DATA / m["id"] / "analysis.json"
+        if not p.exists():
+            continue
+        data = json.loads(p.read_text())
+        if data.get("sections_v", 0) < SECTIONS_VERSION:
+            data = add_sections(m["id"], p, data)
+        return {"job": m["id"], "duration": data.get("duration"), "sections": data.get("sections") or []}
+    # not broken down (yet): an empty answer, not an error, so the console stays clean
+    return {"job": None, "duration": None, "sections": []}
+
+
 @app.get("/api/jobs/{job_id}/files/{name}")
 def get_file(job_id: str, name: str):
     if name not in PUBLIC_JOB_FILES:

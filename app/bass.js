@@ -1,6 +1,6 @@
 // bass section (delve): separate the stems, transcribe notes, detect chords. runs in the encore app (backend/).
 
-import { $, $$, el, icon, setIcon, store, fmtTime, fmtDate, fmtAgo, parseLink, toast, confirmDialog, showMenu, server, media, router, onKeys, api } from "./core.js";
+import { $, $$, el, icon, setIcon, store, fmtTime, textOverflows, fmtDate, fmtAgo, parseLink, toast, confirmDialog, showMenu, server, media, router, onKeys, api } from "./core.js";
 import { renderGetApp } from "./getapp.js";
 import { MODE_LABEL, pickMode, ensureAi } from "./aimode.js";
 import { addToPlaylist } from "./playlist.js";
@@ -718,7 +718,7 @@ const player = (() => {
       const b = secBox.children[i];
       if (!b) return;
       b.textContent = b.dataset.full;
-      if (b.scrollWidth > b.clientWidth + 1) b.textContent = SHORT[p.kind] + (p.label.match(/\d+$/)?.[0] || "");
+      if (textOverflows(b)) b.textContent = SHORT[p.kind] + (p.label.match(/\d+$/)?.[0] || "");
     });
   }
   function loopPart(i) {

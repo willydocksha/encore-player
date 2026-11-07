@@ -1,6 +1,6 @@
 // playlist section (encore): youtube + google drive practice player with playlist, a-b loop, speed, offline drive audio
 
-import { $, $$, el, icon, setIcon, store, fmtTime, parseLink, toast, confirmDialog, showMenu, server, media, onKeys } from "./core.js";
+import { $, $$, el, icon, setIcon, store, fmtTime, textOverflows, parseLink, toast, confirmDialog, showMenu, server, media, onKeys } from "./core.js";
 // waits for the first sync, so the state below already includes what the other page saved
 import { onRemote, appBase } from "./sync.js";
 
@@ -373,6 +373,7 @@ export function playIndex(i, autoplay = true) {
   $("#nowNote").textContent = it.note || "";
   $("#nowNote").hidden = !it.note;
   fetchTitle(it);
+  loadSections(it);
   if (autoplay) media.claim("playlist");
   const tok = ++loadTok;
   if (it.type === "yt") {
@@ -761,6 +762,73 @@ $("#setA").onclick = setA;
 $("#setB").onclick = setB;
 $("#clearAB").onclick = clearAB;
 
+// ------------------------------------------------------------------ song parts (from a breakdown in the encore app)
+const secBox = $("#lpSections");
+const secCache = new Map(); // song key -> {duration, sections}
+let secSong = null, secIdx = -1;
+const secKey = (it) => (it.type === "yt" ? "yt_" : "gd_") + it.id;
+const secParts = () => secSong?.sections || [];
+const secEnd = (i) => secParts()[i + 1]?.t ?? secSong.duration;
+const secAt = (t) => { let i = -1; secParts().forEach((p, j) => { if (p.t <= t + 1e-6) i = j; }); return i; };
+// ask the encore app for the parts of the current song; quietly hides when it has none
+async function loadSections(it) {
+  secSong = null; paintSections();
+  if (!it || appBase() == null) return;
+  const key = secKey(it);
+  if (!secCache.has(key)) {
+    try {
+      const r = await fetch(appBase() + "/api/sections/" + encodeURIComponent(key), { signal: AbortSignal.timeout(60000) });
+      // only remember found parts; a song may be broken down later
+      const s = r.ok ? await r.json() : null;
+      if (s?.sections?.length) secCache.set(key, s);
+    } catch {}
+  }
+  if (cur !== it) return;
+  const s = secCache.get(key);
+  secSong = s?.sections?.length && s.duration ? s : null;
+  paintSections();
+}
+function paintSections() {
+  secIdx = -1;
+  secBox.replaceChildren();
+  secBox.hidden = !secParts().length;
+  const D = secSong?.duration || 1;
+  secParts().forEach((p, i) => {
+    const b = el("button", `sec sec-${p.kind}`, p.label);
+    b.type = "button";
+    b.title = `${p.label} · ${fmtTime(p.t)}–${fmtTime(secEnd(i))} (klik dua kali untuk loop A–B)`;
+    b.style.left = `${(p.t / D) * 100}%`;
+    b.style.width = `${((secEnd(i) - p.t) / D) * 100}%`;
+    b.dataset.full = p.label;
+    // click jumps to the part, double click turns it into the a-b loop
+    b.onclick = () => { P.seek(p.t); render(); };
+    b.ondblclick = () => { A = p.t; B = secEnd(i); updateAB(); P.seek(A); };
+    secBox.append(b);
+  });
+  fitSections();
+}
+// narrow parts get a short label (chorus 2 -> c2)
+const SEC_SHORT = { intro: "In", verse: "V", prechorus: "PC", chorus: "C", bridge: "Br", interlude: "Int", outro: "Out" };
+function fitSections() {
+  secParts().forEach((p, i) => {
+    const b = secBox.children[i];
+    if (!b) return;
+    b.textContent = b.dataset.full;
+    if (textOverflows(b)) b.textContent = SEC_SHORT[p.kind] + (p.label.match(/\d+$/)?.[0] || "");
+  });
+}
+// refit when the strip changes width (window resize, or the playlist page becoming visible)
+new ResizeObserver(fitSections).observe(secBox);
+// highlight the part that is playing
+function updateSections(t) {
+  if (!secParts().length) return;
+  const i = secAt(t);
+  if (i === secIdx) return;
+  secBox.children[secIdx]?.classList.remove("playing");
+  secBox.children[i]?.classList.add("playing");
+  secIdx = i;
+}
+
 // ------------------------------------------------------------------ seek bar
 const bar = $("#bar");
 let dragging = false, abDrag = null;
@@ -805,6 +873,7 @@ function render(pOverride) {
   $("#knob").style.left = p * 100 + "%";
   $("#cur").textContent = fmtTime(pOverride != null ? pOverride * d : t);
   $("#dur").textContent = fmtTime(d);
+  updateSections(pOverride != null ? pOverride * d : t);
   const pl = !!isPlaying();
   if (pl !== lastPlaying) {
     lastPlaying = pl;
@@ -1016,5 +1085,5 @@ export async function initPlaylist() {
   try { navigator.storage?.persist?.(); } catch {}
   server.onChange(() => renderQueue());
   // just connected to the encore app: take its songs and give it the ones cached here
-  addEventListener("encore-connected", () => prefetchAll());
+  addEventListener("encore-connected", () => { prefetchAll(); loadSections(cur); });
 }
