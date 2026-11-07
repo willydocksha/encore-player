@@ -15,7 +15,9 @@ export async function pickMode(title) {
   $("#modeSong").hidden = !title;
   $("#modeAiNote").textContent = server.ai?.installed
     ? "6 instrumen terpisah, not lebih akurat. Beberapa menit per lagu."
-    : "6 instrumen terpisah, not lebih akurat. Perlu download mesin AI sekali dulu.";
+    : server.ai?.update
+      ? "6 instrumen terpisah, not lebih akurat. Mesin AI versi baru tersedia, perlu download ulang."
+      : "6 instrumen terpisah, not lebih akurat. Perlu download mesin AI sekali dulu.";
   // last choice gets the primary look and keyboard focus
   const last = getMode();
   d.querySelectorAll(".mode-opt").forEach((b) => b.classList.toggle("last", b.value === last));
@@ -40,7 +42,24 @@ async function aiStatus() {
 
 const mb = (n) => `${Math.round(n / 1e6)} MB`;
 
+// first-install texts come from index.html; an app update that needs a newer engine says so instead
+const FIRST = {};
+const UPDATE = {
+  aiTitle: "Mesin AI versi baru tersedia",
+  aiIntro: "Update Encore App ini butuh mesin AI versi baru, jadi mesin yang lama tidak bisa dipakai lagi. Download ulang sekali saja, mode cepat tetap jalan selama menunggu:",
+  aiInstallLabel: "Download ulang mesin AI",
+};
+function paintTexts(update) {
+  for (const id of Object.keys(UPDATE)) {
+    // keep the original markup (bold words) to put back
+    FIRST[id] ??= $(`#${id}`).innerHTML;
+    if (update) $(`#${id}`).textContent = UPDATE[id];
+    else $(`#${id}`).innerHTML = FIRST[id];
+  }
+}
+
 function paint(st) {
+  paintTexts(!!st.update);
   const busy = st.state === "installing" || st.state === "unpacking";
   $("#aiProgress").hidden = !busy;
   $("#aiInstall").disabled = busy;

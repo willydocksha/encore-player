@@ -33,7 +33,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 import ai
-from version import APP_VERSION, UI_API
+from version import APP_VERSION, RELEASES, UI_API
 from pipeline import (DRIVE_PRIVATE_MSG, DRUM_VERSION, PIPELINE_VERSION, analyze, drive_title, drum_hits, fetch_audio,
                       open_drive, safe_name, shutdown_pool, source_key, stem_layers, write_drum_midi)
 
@@ -733,6 +733,50 @@ def ui_update():
             os.replace(tmp, dest)
         UI_META.write_text(json.dumps({"app": APP_VERSION, "updated": time.time()}))
     return {"updated": len(got)}
+
+
+# ---------------------------------------------------------------- app updates (needs a new release)
+# the python side can't update itself: the page asks /api/app/check and shows a banner that links to
+# the newest app-v* release on github. the answer is cached so github is asked at most every 6 hours.
+
+APP_CHECK_TTL = 6 * 3600
+APP_RELEASES_API = RELEASES.replace("https://github.com/", "https://api.github.com/repos/")
+app_check_cache: dict = {"at": 0.0, "latest": None, "url": None}
+
+
+def version_tuple(v: str) -> tuple[int, ...]:
+    # "1.2.10" -> (1, 2, 10); anything odd counts as 0
+    return tuple(int(p) if p.isdigit() else 0 for p in v.split("."))
+
+
+def latest_release() -> tuple[str | None, str | None]:
+    """newest published app-v* release on github as (version, page url)."""
+    req = urllib.request.Request(f"{APP_RELEASES_API}?per_page=20",
+                                 headers={"User-Agent": "Encore", "Accept": "application/vnd.github+json"})
+    with urllib.request.urlopen(req, timeout=8) as r:
+        releases = json.loads(r.read())
+    # newest version wins, not the newest date
+    found = [(r["tag_name"][len("app-v"):], r.get("html_url")) for r in releases
+             if isinstance(r, dict) and str(r.get("tag_name", "")).startswith("app-v")
+             and not r.get("draft") and not r.get("prerelease")]
+    if not found:
+        return None, None
+    return max(found, key=lambda f: version_tuple(f[0]))
+
+
+@app.get("/api/app/check")
+def app_check():
+    # refresh the cache when stale; offline keeps the last answer (or none) without an error
+    if time.time() - app_check_cache["at"] > APP_CHECK_TTL:
+        try:
+            latest, url = latest_release()
+            app_check_cache.update(at=time.time(), latest=latest, url=url)
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+    latest = app_check_cache["latest"]
+    return {"current": APP_VERSION, "latest": latest,
+            "available": bool(latest) and version_tuple(latest) > version_tuple(APP_VERSION),
+            "url": app_check_cache["url"] or f"{RELEASES}/latest"}
 
 
 # ---------------------------------------------------------------- web app

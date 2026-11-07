@@ -7,6 +7,7 @@ import { startTour, maybeStartTour } from "./tour.js";
 import { initEar, enterEar } from "./ear.js";
 import { initTuner, enterTuner } from "./tuner.js";
 import { checkUiUpdate } from "./uiupdate.js";
+import { checkAppUpdate } from "./appupdate.js";
 
 router.add(/^#\/?$/, "playlist", () => { leaveSong(); document.title = "Encore"; });
 router.add(/^#\/perfect-pitch\/?$/, "ear", () => { leaveSong(); enterEar(); document.title = "Perfect Pitch · Encore"; });
@@ -43,7 +44,7 @@ initTuner();
 // its first, synchronous part only saved the defaults; from here on saved changes count as the newest (sync.js)
 store.booting = false;
 // the bass pages depend on the local server, so learn whether it is there before routing
-server.check().then(() => { router.resolve(); maybeStartTour(); });
+server.check().then(() => { router.resolve(); maybeStartTour(); if (server.mode === "app") checkAppUpdate(); });
 // each page shows its own tour the first time it is opened
 addEventListener("hashchange", () => maybeStartTour());
 

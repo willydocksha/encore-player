@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 // bump when the ui starts needing encore app endpoints that older releases lack (backend/version.py UI_API)
-const API = 1;
+const API = 2;
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TOP = ['index.html', 'sw.js', 'manifest.webmanifest'];

@@ -58,10 +58,17 @@ def command() -> list[str] | None:
     return [str(exe)] if exe.exists() else None
 
 
+def outdated() -> bool:
+    """an engine for an older ENGINE_VERSION is on disk, so the app update needs a new download."""
+    if _root is None or not _root.is_dir() or (_root / INSTALLED).is_dir():
+        return False
+    return any(d.is_dir() and d.name[:1] == "v" and d.name[1:].isdigit() for d in _root.iterdir())
+
+
 def status() -> dict:
     ready = command() is not None
     return {**state, "state": "ready" if ready and state["state"] != "installing" else state["state"],
-            "installed": ready, "url": os.environ.get("ENCORE_ENGINE_URL") or f"{RELEASES}/download/app-v{APP_VERSION}/{ARCHIVE}"}
+            "installed": ready, "update": not ready and outdated(), "url": os.environ.get("ENCORE_ENGINE_URL") or f"{RELEASES}/download/app-v{APP_VERSION}/{ARCHIVE}"}
 
 
 def install() -> dict:

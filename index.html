@@ -565,10 +565,10 @@ https://youtu.be/…"></textarea>
 <dialog class="sheet small" id="aiDialog">
   <form method="dialog" class="sheet-inner">
     <header class="sheet-head">
-      <h2><svg class="title-icon"><use href="#i-sparkle"/></svg>Mau hasil lebih detail?</h2>
+      <h2><svg class="title-icon"><use href="#i-sparkle"/></svg><span id="aiTitle">Mau hasil lebih detail?</span></h2>
       <button class="icon-btn" value="cancel" aria-label="Tutup"><svg><use href="#i-x"/></svg></button>
     </header>
-    <p>Mode cepat sudah jalan tanpa download apa-apa. Kalau mau hasil yang jauh lebih bersih, pasang <b>mesin AI</b> sekali saja:</p>
+    <p id="aiIntro">Mode cepat sudah jalan tanpa download apa-apa. Kalau mau hasil yang jauh lebih bersih, pasang <b>mesin AI</b> sekali saja:</p>
     <ul class="ai-perks">
       <li><svg><use href="#i-check"/></svg>6 instrumen: gitar dan piano punya jalurnya sendiri</li>
       <li><svg><use href="#i-check"/></svg>Stem lebih bersih, suara antar instrumen jarang bocor</li>
@@ -582,7 +582,7 @@ https://youtu.be/…"></textarea>
     <p class="ai-error" id="aiError" hidden></p>
     <footer class="sheet-foot">
       <button class="btn" value="cancel" id="aiLater">Nanti saja</button>
-      <button class="btn primary" type="button" id="aiInstall"><svg><use href="#i-download"/></svg>Download mesin AI</button>
+      <button class="btn primary" type="button" id="aiInstall"><svg><use href="#i-download"/></svg><span id="aiInstallLabel">Download mesin AI</span></button>
     </footer>
   </form>
 </dialog>

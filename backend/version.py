@@ -8,4 +8,4 @@ ENGINE_FINGERPRINT = "2546294557df29cd"
 RELEASES = "https://github.com/willy-docksha/encore-player/releases"
 # which encore app endpoints the ui may use; the online site's /api/ui says what its ui needs (api/ui.js API).
 # a newer ui is only pulled in when it needs no more than this app offers
-UI_API = 1
+UI_API = 2
