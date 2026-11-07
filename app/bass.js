@@ -683,6 +683,65 @@ const player = (() => {
     }
     lastNowKey = "";
     drawOverviewBase();
+    renderSections();
+  }
+
+  // ---------------- song parts (intro, verse, chorus, ...): a strip above the overview
+  const secBox = $("#sections");
+  let secIdx = -1;
+  const parts = () => song?.sections || [];
+  const partEnd = (i) => parts()[i + 1]?.t ?? song.duration;
+  const partAt = (t) => lowerBound(parts(), t + 1e-6) - 1;
+  function renderSections() {
+    secIdx = -1;
+    secBox.replaceChildren();
+    secBox.hidden = !parts().length;
+    const D = song.duration || 1;
+    parts().forEach((p, i) => {
+      const b = el("button", `sec sec-${p.kind}`, p.label);
+      b.type = "button";
+      b.title = `${p.label} · ${fmtTime(p.t)}–${fmtTime(partEnd(i))} (klik dua kali untuk loop)`;
+      b.style.left = `${(p.t / D) * 100}%`;
+      b.style.width = `${((partEnd(i) - p.t) / D) * 100}%`;
+      // click jumps to the part, double click loops it
+      b.onclick = () => seek(p.t);
+      b.ondblclick = () => loopPart(i);
+      b.dataset.full = p.label;
+      secBox.append(b);
+    });
+    fitSections();
+  }
+  // narrow parts get a short label (chorus 2 -> c2, pre-chorus 1 -> pc1)
+  const SHORT = { intro: "In", verse: "V", prechorus: "PC", chorus: "C", bridge: "Br", interlude: "Int", outro: "Out" };
+  function fitSections() {
+    parts().forEach((p, i) => {
+      const b = secBox.children[i];
+      if (!b) return;
+      b.textContent = b.dataset.full;
+      if (b.scrollWidth > b.clientWidth + 1) b.textContent = SHORT[p.kind] + (p.label.match(/\d+$/)?.[0] || "");
+    });
+  }
+  function loopPart(i) {
+    if (i < 0 || !parts()[i]) return;
+    loop = { a: parts()[i].t, b: partEnd(i), on: true };
+    syncLoopUi();
+    seek(loop.a);
+  }
+  // highlight the part that is playing
+  function updateSections(t) {
+    if (!parts().length) return;
+    const i = partAt(t);
+    if (i === secIdx) return;
+    secBox.children[secIdx]?.classList.remove("playing");
+    secBox.children[i]?.classList.add("playing");
+    secIdx = i;
+  }
+  // previous / next part; "previous" restarts the current part when it is a few seconds in
+  function jumpPart(dir) {
+    if (!parts().length) return;
+    const t = now(), i = partAt(t);
+    const to = dir > 0 ? i + 1 : (i >= 0 && t - parts()[i].t > 2 ? i : i - 1);
+    seek(to < 0 ? 0 : parts()[Math.min(to, parts().length - 1)].t);
   }
 
   function setSub(next) {
@@ -738,6 +797,7 @@ const player = (() => {
     else if (part === "score") updateScore(t, m && !m.paused);
     else draw(t);
     drawOverview(t);
+    updateSections(t);
     updateNow(t);
   }
 
@@ -750,6 +810,7 @@ const player = (() => {
       c.height = Math.max(1, Math.round(r.height * dpr));
     }
     drawOverviewBase();
+    fitSections();
   }
   new ResizeObserver(() => { if (song && router.current === "song") resize(); }).observe(roll);
 
@@ -1811,6 +1872,8 @@ const player = (() => {
     else if (k === "b") setB();
     else if (k === "l") toggleLoop();
     else if (k === "escape") clearLoop();
+    else if (k === "[" || k === "]") jumpPart(k === "]" ? 1 : -1);
+    else if (k === "s") loopPart(partAt(now()));
     else if (k === "t") setSub(sub === "graph" ? "tab" : "graph");
     else if (k === "m") setPart(part === "stack" ? "bass" : "stack");
     else if (k === "v") {

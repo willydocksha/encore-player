@@ -35,6 +35,7 @@ File Google Drive harus dibagikan sebagai **"Siapa saja yang memiliki link"**.
 - Transkripsi bass: pYIN + deteksi petikan ulang. Bagian slap/pop memakai Basic Pitch, dan not sangat rendah diisi pYIN
 - Tempo, beat & downbeat (beat_this, dirapikan jadi grid bar yang stabil; mode cepat: librosa + tebakan awal bar 4/4), chord & kunci, slash chord dari bass
 - **Kunci per bagian**: modulasi (misalnya G naik ke A di chorus terakhir) ikut terbaca. Chord sheet, transpose, not balok/angka, dan MusicXML ganti kunci di bar tempat modulasi
+- **Bagian lagu**: Intro, Verse, Pre-Chorus, Chorus, Bridge, Interlude, Outro tampil sebagai strip di atas ringkasan lagu. Klik untuk lompat, klik dua kali (atau `S`) untuk loop bagian itu. Caranya: bagian yang berulang dicari dari chord dan melodi vokal per bar (Laplacian segmentation, chroma diukur relatif ke kunci lokal supaya chorus setelah modulasi tetap cocok), lalu diberi nama dari ada-tidaknya vokal, seberapa sering diulang, kerasnya, dan posisinya. Lagu lama dapat bagian lagunya otomatis saat dibuka. Tebakan, jadi verse dan chorus masih bisa tertukar
 - **Mixer 6 stem**: Drum, Bass, Vokal, Gitar, Piano, Lainnya (pad/synth). Masing-masing bisa mute, solo, dan diatur volumenya; semuanya kalau dijumlah persis lagu aslinya
 - Satu pilihan tampilan: **Multitrack · Drum · Bass · Vokal · Piano · Gitar · Chord · Not** (bagian yang tidak ada disembunyikan)
   - **Multitrack**: semua instrumen bertumpuk di satu timeline, dengan penanda **filler** (gitar/piano/pad mengisi saat vokal diam) dan **fill drum**. Klik nama lajur untuk mute
@@ -142,7 +143,7 @@ Import repo ini di Vercel, pilih Framework Preset **Other**, lalu Deploy. Yang t
 
 **Playlist:** `Space` play/pause · `N`/`P` next/prev · `S` stop · `R` mode ulang · `←`/`→` 5 detik · `J`/`L` 10 detik · `[`/`]` kecepatan · `A`/`B`/`C` loop A–B
 
-**Breakdown:** `Space` play/pause · `←`/`→` 2 detik · `A`/`B` titik loop · `L` loop on/off · `Esc` hapus loop · `M` multitrack · `V` bagian berikutnya · `T` grafik ↔ tab (bass, gitar) · `1`–`6` mute kanal mixer
+**Breakdown:** `Space` play/pause · `←`/`→` 2 detik · `A`/`B` titik loop · `L` loop on/off · `Esc` hapus loop · `[`/`]` bagian lagu sebelumnya/berikutnya · `S` loop bagian ini · `M` multitrack · `V` bagian berikutnya · `T` grafik ↔ tab (bass, gitar) · `1`–`6` mute kanal mixer
 
 **Perfect Pitch:** `Space` putar soal lagi · `C`–`B` jawab not (Shift untuk ♯) · `Enter` mulai / lihat jawaban / soal berikutnya · `←`/`→` level sebelumnya / berikutnya · `Esc` keluar dari latihan
 

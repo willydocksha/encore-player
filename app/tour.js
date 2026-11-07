@@ -149,6 +149,11 @@ const tours = {
       text: "Not berjalan mengikuti lagu. Klik di mana saja untuk lompat ke bagian itu, atau tahan Shift sambil geser untuk pilih bagian yang mau di-loop.",
     },
     {
+      target: "#sections:not([hidden])",
+      title: "Bagian lagu",
+      text: "Intro, verse, chorus, bridge, dan lainnya, dideteksi otomatis. Klik untuk lompat ke bagian itu, klik dua kali untuk loop bagian itu. Tebakannya bisa meleset, terutama verse dan chorus.",
+    },
+    {
       target: "#overview",
       title: "Seluruh lagu",
       text: "Ringkasan satu lagu penuh dengan chord-nya. Klik untuk pindah ke bagian lain dengan cepat.",

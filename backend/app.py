@@ -34,8 +34,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import ai
 from version import APP_VERSION, RELEASES, UI_API
-from pipeline import (DRIVE_PRIVATE_MSG, DRUM_VERSION, PIPELINE_VERSION, analyze, drive_title, drum_hits, fetch_audio,
-                      open_drive, safe_name, shutdown_pool, source_key, stem_layers, write_drum_midi)
+from pipeline import (DRIVE_PRIVATE_MSG, DRUM_VERSION, PIPELINE_VERSION, SECTIONS_VERSION, analyze, detect_sections,
+                      drive_title, drum_hits, fetch_audio, open_drive, safe_name, shutdown_pool, source_key, stem_layers, write_drum_midi)
 
 FROZEN = getattr(sys, "frozen", False)
 # the web app files: inside the executable, or the repo when run from source
@@ -427,6 +427,25 @@ def add_layers(job_id: str, path: Path, data: dict) -> dict:
         return fresh
 
 
+def add_sections(job_id: str, path: Path, data: dict) -> dict:
+    """older results lack the song parts; find them once from the saved stem mp3s."""
+    with layers_lock:
+        fresh = json.loads(path.read_text())
+        if fresh.get("sections_v", 0) >= SECTIONS_VERSION:
+            return fresh
+        stems = {name: DATA / job_id / f for name, f in (fresh.get("audio") or {}).items()}
+        if not fresh.get("downbeats") or not stems or not all(p.exists() for p in stems.values()):
+            return data
+        try:
+            fresh["sections"] = detect_sections(stems, fresh["downbeats"], fresh["duration"], fresh.get("keys"))
+        except Exception:
+            traceback.print_exc()
+            fresh["sections"] = []
+        fresh["sections_v"] = SECTIONS_VERSION
+        path.write_text(json.dumps(fresh))
+        return fresh
+
+
 @app.get("/api/jobs/{job_id}/analysis")
 def get_analysis(job_id: str):
     p = DATA / job_id / "analysis.json"
@@ -435,6 +454,8 @@ def get_analysis(job_id: str):
     data = json.loads(p.read_text())
     if "layers" not in data or (data["layers"].get("drums") is not None and data["layers"].get("drums_v", 1) < DRUM_VERSION):
         data = add_layers(job_id, p, data)
+    if data.get("sections_v", 0) < SECTIONS_VERSION:
+        data = add_sections(job_id, p, data)
     meta = read_meta(job_id)
     data.update(analysis_info(job_id, meta))
     data["url"] = (meta.get("source") or {}).get("url")

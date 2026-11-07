@@ -1414,6 +1414,249 @@ def stem_layers(stem_paths: dict[str, Path]) -> dict:
     return layers
 
 
+# ---------------------------------------------------------------- song sections (intro, verse, chorus, ...)
+
+SECTIONS_VERSION = 1  # bump to rebuild the sections of saved songs from their stems
+SEC_SR = 11025
+SEC_HOP = 512
+SEC_GROUPS = 4  # kinds of repeating parts the clustering looks for
+SEC_MEMORY = 8  # bars of context per bar when comparing (a phrase, not a single bar)
+SEC_SMOOTH = 5  # bars, smooths the cluster features so parts don't flicker
+SEC_MIN_BARS = 3  # shorter parts join a neighbour
+VOCAL_ON_DB = -22.0  # vocal frames above this (vs the loud vocal level) count as singing
+VOCAL_BAR = 0.3  # a bar or part sings when this share of its frames does
+INSTR_RUN = 3  # this many bars in a row without singing inside a part become their own part
+SECTION_NAMES = {"intro": "Intro", "verse": "Verse", "prechorus": "Pre-Chorus", "chorus": "Chorus",
+                 "bridge": "Bridge", "interlude": "Interlude", "outro": "Outro"}
+
+
+def key_tonic(key: str) -> int:
+    # "Bb major" -> 10
+    name = key.split()[0]
+    return NOTE_NAMES_FLAT.index(name) if name in NOTE_NAMES_FLAT else NOTE_NAMES_SHARP.index(name)
+
+
+def section_features(stem_paths: dict[str, Path], bars: np.ndarray, keys: list[dict]) -> dict[str, np.ndarray]:
+    """per-bar features from the stems: harmony + vocal chroma in the local key, timbre, singing, loudness."""
+    ys = {}
+    for name, p in stem_paths.items():
+        if Path(p).exists():
+            ys[name], _ = librosa.load(p, sr=SEC_SR, mono=True)
+    n = min(len(y) for y in ys.values())
+    ys = {k: y[:n] for k, y in ys.items()}
+    mix = sum(ys.values())
+    band = [y for k, y in ys.items() if k not in ("drums", "vocals")]
+    harm = sum(band) if band else mix
+    vox = ys.get("vocals", np.zeros(n))
+    # frame features
+    chroma_h = librosa.feature.chroma_cqt(y=harm, sr=SEC_SR, hop_length=SEC_HOP)
+    chroma_v = librosa.feature.chroma_cqt(y=vox, sr=SEC_SR, hop_length=SEC_HOP)
+    mfcc = librosa.feature.mfcc(y=mix, sr=SEC_SR, hop_length=SEC_HOP, n_mfcc=13)
+    vrms = librosa.feature.rms(y=vox, hop_length=SEC_HOP)[0]
+    mrms = librosa.feature.rms(y=mix, hop_length=SEC_HOP)[0]
+    nf = min(chroma_h.shape[1], chroma_v.shape[1], mfcc.shape[1], len(vrms), len(mrms))
+    # singing per frame: vocal level near its own loud level, not just bleed
+    vdb = librosa.amplitude_to_db(vrms[:nf] + 1e-9)
+    sing = (vdb > np.percentile(vdb, 95) + VOCAL_ON_DB).astype(float)
+    mdb = librosa.amplitude_to_db(mrms[:nf] + 1e-9)
+    # median per bar (robust to fills and hits)
+    edges = np.clip(librosa.time_to_frames(bars, sr=SEC_SR, hop_length=SEC_HOP), 0, nf - 1)
+    spans = [(a, max(b, a + 1)) for a, b in zip(edges[:-1], edges[1:])]
+    per_bar = lambda f, agg=np.median: np.array([agg(f[..., a:b], axis=-1) for a, b in spans]).T
+    ch, cv = per_bar(chroma_h[:, :nf]), per_bar(chroma_v[:, :nf])
+    # chroma relative to the local key, so a chorus after a key change still matches
+    for i, t in enumerate(bars[:-1]):
+        here = [k for k in keys if k["t"] <= t + 1e-6] or keys[:1]
+        shift = key_tonic(here[-1]["key"]) if here else 0
+        ch[:, i], cv[:, i] = np.roll(ch[:, i], -shift), np.roll(cv[:, i], -shift)
+    return {"chroma_h": ch, "chroma_v": cv, "mfcc": per_bar(mfcc[:, :nf]),
+            "sing": per_bar(sing[:nf], np.mean), "loud": per_bar(mdb[:nf], np.mean)}
+
+
+def kmeans(x: np.ndarray, k: int, iters: int = 100, tries: int = 10) -> np.ndarray:
+    """plain k-means (k-means++ starts, fixed seed), returns a label per row."""
+    rng = np.random.default_rng(0)
+    best, best_cost = None, np.inf
+    for _ in range(tries):
+        # k-means++ starts
+        cent = [x[rng.integers(len(x))]]
+        for _ in range(1, k):
+            d = np.min(((x[:, None, :] - np.array(cent)[None]) ** 2).sum(-1), axis=1)
+            cent.append(x[rng.choice(len(x), p=d / d.sum())] if d.sum() > 0 else x[rng.integers(len(x))])
+        cent = np.array(cent)
+        for _ in range(iters):
+            lab = ((x[:, None, :] - cent[None]) ** 2).sum(-1).argmin(1)
+            new = np.array([x[lab == j].mean(0) if np.any(lab == j) else cent[j] for j in range(k)])
+            if np.allclose(new, cent):
+                break
+            cent = new
+        cost = ((x - cent[lab]) ** 2).sum()
+        if cost < best_cost:
+            best, best_cost = lab, cost
+    return best
+
+
+def bar_clusters(f: dict[str, np.ndarray], k: int = SEC_GROUPS) -> np.ndarray:
+    """repeating-part id per bar: laplacian segmentation (mcfee & ellis 2014) on bar features.
+
+    recurrence (bars whose next few bars sound alike, by harmony and melody) plus continuity
+    (neighbour bars with similar timbre) form a graph; its smoothest eigenvectors are clustered.
+    """
+    n = f["chroma_h"].shape[1]
+    feat = np.vstack([librosa.util.normalize(f["chroma_h"], axis=0), 0.7 * librosa.util.normalize(f["chroma_v"], axis=0)])
+    stacked = librosa.feature.stack_memory(feat, n_steps=SEC_MEMORY)
+    rec = librosa.segment.recurrence_matrix(stacked, width=3, mode="affinity", sym=True)
+    rec = librosa.segment.timelag_filter(scipy.ndimage.median_filter)(rec, size=(1, 5))
+    # neighbour bars with similar timbre stay together
+    step = np.sum(np.diff(f["mfcc"], axis=1) ** 2, axis=0)
+    path = np.exp(-step / (np.median(step) + 1e-9))
+    seq = np.diag(path, 1) + np.diag(path, -1)
+    deg_s, deg_r = seq.sum(1), rec.sum(1)
+    mu = deg_s.dot(deg_s + deg_r) / (np.sum((deg_s + deg_r) ** 2) + 1e-9)
+    graph = mu * rec + (1 - mu) * seq
+    # normalized graph laplacian: I - D^-1/2 A D^-1/2
+    inv = 1 / np.sqrt(np.maximum(graph.sum(1), 1e-9))
+    lap = np.eye(n) - inv[:, None] * graph * inv[None, :]
+    _, vecs = np.linalg.eigh(lap)
+    vecs = scipy.ndimage.median_filter(vecs, size=(SEC_SMOOTH, 1))
+    k = min(k, n)
+    x = vecs[:, :k] / (np.sqrt(np.cumsum(vecs ** 2, axis=1))[:, k - 1:k] + 1e-9)
+    return kmeans(x, k)
+
+
+def bar_runs(lab: np.ndarray, sing: np.ndarray) -> list[list[int]]:
+    """parts as [first bar, end bar, group]: cluster runs, instrumental stretches split out, tiny parts merged."""
+    n = len(lab)
+    # runs of the same cluster
+    runs = []
+    for i in range(n):
+        if runs and lab[i] == runs[-1][2]:
+            runs[-1][1] = i + 1
+        else:
+            runs.append([i, i + 1, int(lab[i])])
+    # bars without singing, several in a row, are their own (instrumental) part
+    quiet = sing < VOCAL_BAR
+    out = []
+    for a, b, g in runs:
+        i = a
+        while i < b:
+            j = i
+            while j < b and quiet[j] == quiet[i]:
+                j += 1
+            if quiet[i] and j - i >= INSTR_RUN and (j - i < b - a):
+                out.append([i, j, -1])  # -1: instrumental
+            elif out and out[-1][2] == g and out[-1][1] == i:
+                out[-1][1] = j
+            else:
+                out.append([i, j, g])
+            i = j
+    # tiny parts join the previous part (the first one joins the next), instrumental edges stay
+    merged = True
+    while merged and len(out) > 1:
+        merged = False
+        for i, (a, b, g) in enumerate(out):
+            edge_instr = g == -1 and (i == 0 or i == len(out) - 1) and b - a >= 2
+            if b - a < SEC_MIN_BARS and not edge_instr:
+                if i > 0:
+                    out[i - 1][1] = b
+                else:
+                    out[1][0] = a
+                out.pop(i)
+                merged = True
+                break
+        # neighbours of the same group are one part
+        for i in range(len(out) - 1, 0, -1):
+            if out[i][2] == out[i - 1][2]:
+                out[i - 1][1] = out[i][1]
+                out.pop(i)
+    return out
+
+
+def label_parts(parts: list[list[int]], sing: np.ndarray, loud: np.ndarray) -> list[str]:
+    """section kind per part, from singing, repetition, loudness and position."""
+    n = len(parts)
+    vocal = [g != -1 and sing[a:b].mean() >= VOCAL_BAR for a, b, g in parts]
+    first_v = next((i for i in range(n) if vocal[i]), n)
+    last_v = max((i for i in range(n) if vocal[i]), default=-1)
+    # parts without singing: intro, interlude, outro by position
+    kinds = ["" if vocal[i] else "intro" if i < first_v else "outro" if i > last_v else "interlude" for i in range(n)]
+    groups = {}
+    for i, (a, b, g) in enumerate(parts):
+        if vocal[i]:
+            groups.setdefault(g, []).append(i)
+    if not groups:
+        return kinds
+    # chorus: the sung part that repeats most, fills the most bars and is loudest
+    level = {g: float(np.mean([loud[parts[i][0]:parts[i][1]].mean() for i in idx])) for g, idx in groups.items()}
+    lo, hi = min(level.values()), max(level.values())
+    bars = lambda g: sum(parts[i][1] - parts[i][0] for i in groups[g])
+    score = lambda g: len(groups[g]) + bars(g) / 16 + 2 * (level[g] - lo) / (hi - lo + 1e-9)
+    chorus = max(groups, key=score)
+    # verse: the other sung part that repeats and fills the most bars (else the earliest one)
+    others = [g for g in groups if g != chorus]
+    repeat = [g for g in others if len(groups[g]) > 1]
+    verse = max(repeat, key=bars) if repeat else min(others, key=lambda g: groups[g][0], default=None)
+    late = parts[min(n - 1, max(0, int(0.4 * n)))][0]  # a bridge comes in the later part of the song
+    for g, idx in groups.items():
+        for i in idx:
+            if g == chorus:
+                kinds[i] = "chorus"
+            elif g == verse:
+                kinds[i] = "verse"
+            elif all(j + 1 < n and parts[j + 1][2] == chorus for j in idx) and \
+                    all(parts[j][1] - parts[j][0] <= 8 for j in idx):
+                kinds[i] = "prechorus"  # short, always right before a chorus
+            elif len(idx) <= 2 and parts[idx[0]][0] >= late and groups[g][0] > groups[chorus][0]:
+                kinds[i] = "bridge"  # once (or twice), late, after a chorus
+            else:
+                kinds[i] = "verse"
+    return kinds
+
+
+def song_bars(downbeats: list[float], duration: float) -> np.ndarray:
+    """bar start times plus the song end; a pickup joins the first bar, half bars join the previous one."""
+    downs = np.asarray([d for d in downbeats if d < duration - 1.0])
+    if len(downs) < 2:
+        return np.array([0.0, duration])
+    med = float(np.median(np.diff(downs)))
+    kept = [float(downs[0])]
+    for d in downs[1:]:
+        if d - kept[-1] >= 0.6 * med:
+            kept.append(float(d))
+    if kept[0] < 0.6 * med:
+        kept[0] = 0.0
+    else:
+        kept.insert(0, 0.0)
+    return np.array(kept + [duration])
+
+
+def detect_sections(stem_paths: dict[str, Path], downbeats: list[float], duration: float,
+                    keys: list[dict] | None = None) -> list[dict]:
+    """song parts [{t, kind, label}] in time order; each part runs until the next one (or the song end)."""
+    bars = song_bars(downbeats, duration)
+    if len(bars) < 24:
+        return []
+    f = section_features(stem_paths, bars, keys or [])
+    parts = bar_runs(bar_clusters(f), f["sing"])
+    kinds = label_parts(parts, f["sing"], f["loud"])
+    # neighbours of the same kind become one part (two choruses in a row are one chorus)
+    merged = []
+    for (a, _, g), k in zip(parts, kinds):
+        if merged and merged[-1]["kind"] == k:
+            continue
+        merged.append({"bar": a, "kind": k, "group": g})
+    # numbered labels: verse 1, verse 2, ... (a kind that occurs once has no number)
+    total = {k: sum(m["kind"] == k for m in merged) for k in SECTION_NAMES}
+    seen = dict.fromkeys(SECTION_NAMES, 0)
+    out = []
+    for m in merged:
+        k = m["kind"]
+        seen[k] += 1
+        out.append({"t": round(float(bars[m["bar"]]), 3), "kind": k,
+                    "label": SECTION_NAMES[k] + (f" {seen[k]}" if total[k] > 1 else "")})
+    return out
+
+
 # ---------------------------------------------------------------- midi export
 
 def write_midi(notes: list[dict], bpm: float, path: Path, program: int = 33, channel: int = 0) -> None:
@@ -1559,6 +1802,12 @@ def analyze(job_dir: Path, title: str, progress: Progress, mode: str = "ai") -> 
     (job_dir / "rest.mp3").unlink(missing_ok=True)  # replaced by the separate stems
     progress("Menyiapkan tampilan multitrack", 0.97)
     layers = stem_layers({name: stems[name] for name in STEMS if name in stems})
+    # song parts (intro, verse, chorus, ...); a failure here must not lose the whole analysis
+    try:
+        sections = detect_sections({name: stems[name] for name in STEMS if name in stems}, downbeats, duration, keys)
+    except Exception:
+        traceback.print_exc()
+        sections = []
     write_midi(notes, bpm, job_dir / "bass.mid")
     write_midi(vocals["notes"], bpm, job_dir / "vocals.mid", program=53)
     for part, program in (("piano", 0), ("guitar", 25)):
@@ -1579,6 +1828,8 @@ def analyze(job_dir: Path, title: str, progress: Progress, mode: str = "ai") -> 
         **{part: {"notes": ns} for part, ns in poly.items()},
         "chords": chords,
         "layers": layers,
+        "sections": sections,
+        "sections_v": SECTIONS_VERSION,
         "audio": {name: f"{name}.mp3" for name in STEMS if name in stems},
         "version": PIPELINE_VERSION,
         "mode": mode,
