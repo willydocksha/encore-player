@@ -1,6 +1,7 @@
 // bass section (delve): separate the stems, transcribe notes, detect chords. runs in the encore app (backend/).
 
 import { $, $$, el, icon, setIcon, store, fmtTime, textOverflows, fmtDate, fmtAgo, parseLink, toast, confirmDialog, showMenu, server, media, router, onKeys, api } from "./core.js";
+import { pitchNode, fmtSemis, clampSemis, PITCH_LATENCY } from "./pitch.js";
 import { renderGetApp } from "./getapp.js";
 import { MODE_LABEL, pickMode, ensureAi } from "./aimode.js";
 import { addToPlaylist } from "./playlist.js";
@@ -425,7 +426,7 @@ function lowerBound(arr, x, key = (o) => o.t) {
 const player = (() => {
   const roll = $("#roll"), ov = $("#overview");
   // one <audio> per stem; the first one is the clock the others follow
-  let tracks = []; // [{name, el, vol, muted, solo}]
+  let tracks = []; // [{name, el, vol, muted, solo, src}]
   const master = () => tracks[0]?.el;
   const ctx = roll.getContext("2d"), octx = ov.getContext("2d");
 
@@ -436,6 +437,8 @@ const player = (() => {
   let sub = "graph"; // graph | tab (bass and guitar)
   let windowSec = 7;
   let speed = 1;
+  let pitch = 0; // semitones, saved per song
+  let actx = null, shifter = null, shifterLoading = false;
   let loop = { a: null, b: null, on: false };
   let raf = 0;
   let dragSel = null;
@@ -453,7 +456,9 @@ const player = (() => {
     if (m.paused) return m.currentTime;
     const t = m.currentTime, p = performance.now();
     if (t !== clock.audio) clock = { audio: t, perf: p };
-    return clock.audio + ((p - clock.perf) / 1000) * m.playbackRate;
+    // while shifting, what you hear runs a little behind the element
+    const lag = shifter && pitch ? (PITCH_LATENCY / actx.sampleRate) * m.playbackRate : 0;
+    return Math.max(0, clock.audio + ((p - clock.perf) / 1000) * m.playbackRate - lag);
   };
 
   function load(id, data) {
@@ -484,6 +489,8 @@ const player = (() => {
     drumGrid = buildDrumGrid(data);
     transpose = 0;
     try { transpose = Number(localStorage.getItem(`delve.transpose.${id}`)) || 0; } catch {}
+    pitch = 0;
+    try { pitch = clampSemis(Number(localStorage.getItem(`delve.pitch.${id}`)) || 0); } catch {}
     sheet = null;
     score = null;
     if (!(data.vocals?.notes?.length) && scorePart === "vocals") scorePart = "bass";
@@ -491,6 +498,7 @@ const player = (() => {
     loop = { a: null, b: null, on: false };
     syncLoopUi();
     buildTracks(id, data.audio || { bass: "bass.mp3", rest: "rest.mp3" });
+    applyPitch();
     setPart(hasPart(store.get("bass-part", "bass")) ? store.get("bass-part", "bass") : "bass", true);
     lastNowKey = "";
     requestAnimationFrame(() => { resize(); raf = requestAnimationFrame(tick); });
@@ -510,6 +518,7 @@ const player = (() => {
 
   function buildTracks(id, audioMap) {
     const box = $("#stemAudio");
+    tracks.forEach((t) => t.src?.disconnect());
     box.replaceChildren();
     const prefs = store.get("bass-mixer", {});
     tracks = ORDER.filter((n) => audioMap[n]).map((name) => {
@@ -520,8 +529,43 @@ const player = (() => {
       box.append(a);
       return { name, el: a, vol: prefs[name] ?? (name === "bass" ? 1 : 0.85), muted: false, solo: false };
     });
+    routeTracks();
     applyMix();
     renderMixer();
+  }
+
+  // ---------------- pitch: every stem goes through one shifter once it's first used
+  // element volume and mute still apply before the shifter, so the mixer keeps working
+  function routeTracks() {
+    if (!shifter) return;
+    for (const t of tracks) if (!t.src) { t.src = actx.createMediaElementSource(t.el); t.src.connect(shifter); }
+  }
+  async function applyPitch() {
+    paintPitch();
+    if (shifter) { shifter.setSemitones(pitch); return; }
+    if (!pitch || shifterLoading) return;
+    shifterLoading = true;
+    try {
+      actx ||= new (window.AudioContext || window.webkitAudioContext)();
+      const node = await pitchNode(actx);
+      if (!node) { toast("Browser ini belum bisa mengubah nada", { ms: 2500 }); return; }
+      node.connect(actx.destination);
+      shifter = node;
+      shifter.setSemitones(pitch);
+      // routed elements go silent while the context is suspended: wake it if already playing
+      if (master() && !master().paused) actx.resume().catch(() => {});
+      routeTracks();
+    } finally { shifterLoading = false; }
+  }
+  function setPitch(v) {
+    pitch = clampSemis(v);
+    try { localStorage.setItem(`delve.pitch.${jobId}`, String(pitch)); } catch {}
+    if (actx?.state === "suspended") actx.resume().catch(() => {});
+    applyPitch();
+  }
+  function paintPitch() {
+    $("#bPitchVal").textContent = fmtSemis(pitch);
+    $("#bPitchVal").classList.toggle("active", !!pitch);
   }
 
   function applyMix() {
@@ -765,6 +809,7 @@ const player = (() => {
     if (!song || !tracks.length) return;
     if (master().paused) {
       media.claim("bass");
+      if (actx?.state === "suspended") actx.resume().catch(() => {});
       const t0 = master().currentTime;
       tracks.forEach((t) => { t.el.currentTime = t0; });
       try { await Promise.all(tracks.map((t) => t.el.play())); } catch {}
@@ -1847,6 +1892,9 @@ const player = (() => {
     tracks.forEach((x) => { x.el.playbackRate = speed; });
     $$("#bSpeed button").forEach((x) => x.classList.toggle("active", x === b));
   }));
+  $("#bPitchDown").addEventListener("click", () => setPitch(pitch - 1));
+  $("#bPitchUp").addEventListener("click", () => setPitch(pitch + 1));
+  $("#bPitchVal").addEventListener("click", () => setPitch(0));
   $("#loopA").addEventListener("click", setA);
   $("#loopB").addEventListener("click", setB);
   $("#loopToggle").addEventListener("click", toggleLoop);
@@ -1871,6 +1919,8 @@ const player = (() => {
     else if (k === "a") setA();
     else if (k === "b") setB();
     else if (k === "l") toggleLoop();
+    else if (k === "-") setPitch(pitch - 1);
+    else if (k === "=" || k === "+") setPitch(pitch + 1);
     else if (k === "escape") clearLoop();
     else if (k === "[" || k === "]") jumpPart(k === "]" ? 1 : -1);
     else if (k === "s") loopPart(partAt(now()));

@@ -171,6 +171,12 @@
               </div>
               <div class="stepper"><button type="button" id="slower" title="Lebih pelan ([)">−</button><span>0.05 per langkah</span><button type="button" id="faster" title="Lebih cepat (])">+</button></div>
             </div>
+            <div class="card tool pitch">
+              <div class="tool-head"><h3>Nada</h3><span class="tool-val" id="pitchVal">0</span></div>
+              <div class="stepper"><button type="button" id="pitchDown" title="Turunkan setengah nada (−)" aria-label="Turunkan nada">−</button><button type="button" class="pill" id="pitchReset" title="Kembali ke nada asli">Nada asli</button><button type="button" id="pitchUp" title="Naikkan setengah nada (=)" aria-label="Naikkan nada">+</button></div>
+              <p class="tool-hint" id="pitchHint" hidden>Nada hanya untuk lagu Google Drive. Audio YouTube tidak bisa diolah browser.</p>
+              <p class="tool-hint pitch-note">Setengah nada per langkah, tempo tetap. Disimpan per lagu.</p>
+            </div>
             <div class="card tool">
               <div class="tool-head"><h3>Loop A–B</h3><span class="tool-val sm" id="abText">Belum ada</span></div>
               <div class="seg">
@@ -390,6 +396,14 @@
           <div class="seg" id="bSpeed">
             <button type="button" data-speed="0.5">0.5</button><button type="button" data-speed="0.75">0.75</button>
             <button type="button" data-speed="0.85">0.85</button><button type="button" data-speed="1" class="active">1×</button>
+          </div>
+        </div>
+        <div class="dock-group">
+          <span class="label">Nada</span>
+          <div class="seg" id="bPitch" role="group" aria-label="Nada">
+            <button type="button" id="bPitchDown" title="Turunkan setengah nada (−)" aria-label="Turunkan nada">−</button>
+            <button type="button" id="bPitchVal" class="pitch-val" title="Kembali ke nada asli">0</button>
+            <button type="button" id="bPitchUp" title="Naikkan setengah nada (=)" aria-label="Naikkan nada">+</button>
           </div>
         </div>
         <div class="dock-group extra">
@@ -656,6 +670,7 @@ https://youtu.be/…"></textarea>
           <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>mundur / maju 5 detik</dd>
           <dt><kbd>J</kbd> <kbd>L</kbd></dt><dd>mundur / maju 10 detik</dd>
           <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>pelan / cepat</dd>
+          <dt><kbd>−</kbd> <kbd>=</kbd></dt><dd>nada turun / naik setengah (lagu Drive)</dd>
           <dt><kbd>A</kbd> <kbd>B</kbd> <kbd>C</kbd></dt><dd>set A / set B / hapus loop</dd>
           <dt><kbd>M</kbd></dt><dd>mute / unmute</dd>
           <dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>volume naik / turun</dd>
@@ -668,6 +683,7 @@ https://youtu.be/…"></textarea>
           <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>geser 2 detik</dd>
           <dt><kbd>A</kbd> <kbd>B</kbd></dt><dd>set titik loop</dd>
           <dt><kbd>L</kbd> <kbd>Esc</kbd></dt><dd>loop on/off / hapus</dd>
+          <dt><kbd>−</kbd> <kbd>=</kbd></dt><dd>nada turun / naik setengah</dd>
           <dt><kbd>M</kbd></dt><dd>multitrack</dd>
           <dt><kbd>V</kbd></dt><dd>bagian berikutnya (drum, bass, vokal, …)</dd>
           <dt><kbd>T</kbd></dt><dd>grafik ↔ tab (bass, gitar)</dd>

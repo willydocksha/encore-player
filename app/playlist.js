@@ -1,8 +1,9 @@
-// playlist section (encore): youtube + google drive practice player with playlist, a-b loop, speed, offline drive audio
+// playlist section (encore): youtube + google drive practice player with playlist, a-b loop, speed, pitch, offline drive audio
 
 import { $, $$, el, icon, setIcon, store, fmtTime, textOverflows, parseLink, toast, confirmDialog, showMenu, server, media, onKeys } from "./core.js";
 // waits for the first sync, so the state below already includes what the other page saved
 import { onRemote, appBase } from "./sync.js";
+import { pitchNode, fmtSemis, clampSemis } from "./pitch.js";
 
 const audio = $("#audio");
 let list = store.get("lp-playlist", []); // [{url,type,id,start,title,note,bad}]
@@ -399,7 +400,7 @@ export function playIndex(i, autoplay = true) {
     else if (onApp.has(it.id)) cacheDrive(it.id).then(async (ok) => { const u = ok ? await cachedURL(it.id) : null; if (u) blobURLs.set(it.id, u); setSrc(u || net, !!u); });
     else setSrc(net, false);
   }
-  prepareAround(); paintEq(); normTrack();
+  prepareAround(); paintEq(); normTrack(); paintPitch(); applyPitch();
   renderQueue(); render(); updateMediaSession();
   $("#queue .q-item.cur")?.scrollIntoView({ block: "nearest" });
 }
@@ -576,7 +577,7 @@ const EQ_PRESETS = {
   vocal: { name: "Vokal", g: [-3, -1, 3, 4, 1] },
 };
 let eqGains = store.get("lp-eq", EQ_PRESETS.flat.g);
-let eqCtx = null, eqNodes = null, eqPre = null, normGain = null, limiter = null, meter = null;
+let eqCtx = null, eqNodes = null, eqPre = null, normGain = null, limiter = null, meter = null, shifter = null;
 const eqFlat = () => eqGains.every((g) => !g);
 
 // build the filter chain on first use
@@ -599,7 +600,7 @@ function eqGraph() {
     // side branch that measures the raw level for the live estimate
     meter = eqCtx.createAnalyser(); meter.fftSize = 8192;
     src.connect(meter);
-    applyGains(); applyNorm(true);
+    applyGains(); applyNorm(true); applyPitch();
     return true;
   } catch { eqCtx = null; return false; }
 }
@@ -613,7 +614,7 @@ function applyGains() {
 }
 // make sure the context runs before (or while) audio plays
 function eqWake() {
-  if (!eqCtx && (!eqFlat() || norm)) eqGraph();
+  if (!eqCtx && (!eqFlat() || norm || songPitch())) eqGraph();
   if (eqCtx?.state === "suspended") eqCtx.resume().catch(() => {});
 }
 function setEq(g) {
@@ -647,6 +648,47 @@ function paintEq() {
   $(".tool.eq").classList.toggle("off", isYT);
 }
 paintEq();
+
+// ------------------------------------------------------------------ pitch (drive audio only)
+// semitones up/down without changing speed, saved per song (a song tuned to eb stays shifted).
+// a worklet before the limiter does it; at 0 it passes audio through untouched.
+const pitches = store.get("lp-pitch", {}); // song id -> semitones
+const songPitch = () => (cur && cur.type !== "yt" ? pitches[cur.id] || 0 : 0);
+let shifterLoading = false;
+// make sure the shifter is in the graph when needed, then send it the current value
+async function applyPitch() {
+  const s = songPitch();
+  if (shifter) { shifter.setSemitones(s); return; }
+  if (!s || !eqCtx || shifterLoading) return;
+  shifterLoading = true;
+  const node = await pitchNode(eqCtx);
+  shifterLoading = false;
+  if (!node) { toast("Browser ini belum bisa mengubah nada", { ms: 2500 }); return; }
+  // before the limiter, so a shifted song can't clip
+  normGain.disconnect();
+  normGain.connect(node).connect(limiter);
+  shifter = node;
+  shifter.setSemitones(songPitch());
+}
+function setPitch(v) {
+  if (!cur || cur.type === "yt") return;
+  const s = clampSemis(v);
+  if (s) pitches[cur.id] = s; else delete pitches[cur.id];
+  store.set("lp-pitch", pitches);
+  eqWake(); applyPitch(); paintPitch();
+}
+function paintPitch() {
+  const s = songPitch(), isYT = cur?.type === "yt";
+  $("#pitchVal").textContent = fmtSemis(s);
+  $("#pitchReset").disabled = !s;
+  $("#pitchHint").hidden = !isYT;
+  $(".pitch-note").hidden = isYT;
+  $(".tool.pitch").classList.toggle("off", isYT);
+}
+$("#pitchDown").onclick = () => setPitch(songPitch() - 1);
+$("#pitchUp").onclick = () => setPitch(songPitch() + 1);
+$("#pitchReset").onclick = () => setPitch(0);
+paintPitch();
 
 // ------------------------------------------------------------------ auto volume (drive audio only, off by default)
 // evens out loud and quiet songs. each song is measured once from its offline copy and gets its own gain;
@@ -904,6 +946,7 @@ onKeys("playlist", (e) => {
     arrowleft: () => P.seek(P.time() - 5), arrowright: () => P.seek(P.time() + 5),
     j: () => P.seek(P.time() - 10), l: () => P.seek(P.time() + 10),
     "[": () => applyRate(rate - 0.05), "]": () => applyRate(rate + 0.05),
+    "-": () => setPitch(songPitch() - 1), "=": () => setPitch(songPitch() + 1), "+": () => setPitch(songPitch() + 1),
     a: setA, b: setB, c: clearAB, m: () => setMuted(!muted),
     arrowup: () => nudgeVol(5), arrowdown: () => nudgeVol(-5),
   }[e.key.toLowerCase()];
