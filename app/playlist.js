@@ -117,7 +117,7 @@ function addLinks(replace) {
   const fromChat = ok.filter((x) => x.title).length;
   toast(`${ok.length} lagu ditambahkan` + (fromChat ? ` · ${fromChat} judul dari chat` : "") + (bad.length ? ` · ${bad.length} link dilewati` : ""));
   if (wasEmpty) playIndex(0, false);
-  pruneCache(); prefetchAll();
+  pruneCache(true); prefetchAll();
 }
 
 // add from another section (bass -> playlist)
@@ -149,7 +149,7 @@ async function removeAt(i) {
     else { stop(); idx = -1; cur = null; showEmptyPlayer(); }
   }
   if (!list.length) setName(null);
-  save(); renderQueue(); pruneCache();
+  save(); renderQueue(); pruneCache(true);
 }
 
 // swap a song's link in place: keeps its spot and note, looks the title up again
@@ -198,7 +198,7 @@ function relink(i) {
     save(); renderQueue();
     if (!item.title) fetchTitle(item);
     toast(`Link lagu #${i + 1} diganti`);
-    pruneCache(); prefetchAll();
+    pruneCache(true); prefetchAll();
   }, { once: true });
 }
 
@@ -996,6 +996,15 @@ async function giveToApp(id, blob) {
     if (r.ok) onApp.add(id);
   } catch {}
 }
+// delete the app's copies of songs no longer in the playlist (older apps without delete just say no)
+async function pruneApp(keep) {
+  if (appBase() == null) return;
+  await loadAppIds();
+  for (const id of [...onApp]) {
+    if (keep.has(id)) continue;
+    try { const r = await fetch(appURL(id), { method: "DELETE" }); if (r.ok) onApp.delete(id); } catch {}
+  }
+}
 // songs cached here before the app had them: pass them over one by one in the background
 async function shareCached() {
   if (appBase() == null || !hasCache) return;
@@ -1049,9 +1058,13 @@ async function prefetchAll() {
     await shareCached();
   } finally { prefetching = false; }
 }
-async function pruneCache() {
-  if (!hasCache) return;
+// drop downloads of songs that left the playlist; songs still in it are kept and reused.
+// fromEdit: the user changed the playlist here, so the app's copies go too (not on boot or
+// sync, where this page's list may still be stale)
+async function pruneCache(fromEdit = false) {
   const keep = new Set(list.filter((x) => x.type === "drive").map((x) => x.id));
+  if (fromEdit) pruneApp(keep);
+  if (!hasCache) return;
   // forget levels of songs that left the playlist
   Object.keys(loud).forEach((id) => { if (!keep.has(id)) delete loud[id]; });
   store.set("lp-loud", loud);

@@ -614,6 +614,15 @@ async def audio_put(drive_id: str, request: Request):
     return {"ok": True}
 
 
+@app.delete("/api/audio/{drive_id}")
+def audio_delete(drive_id: str):
+    # a song that left the playlist: drop its file and type sidecar
+    f = audio_file(drive_id)
+    f.unlink(missing_ok=True)
+    type_file(f).unlink(missing_ok=True)
+    return {"ok": True}
+
+
 @app.post("/api/ai/install")
 def ai_install():
     return ai.install()
