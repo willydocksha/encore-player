@@ -536,7 +536,6 @@ function songRow(s, i) {
   // loaded, then tweaked: offer to save the tweak into it
   if (changed) {
     const up = el("button", "btn sm metro-song-save", "Simpan");
-    up.append(el("span", "wide-only", " ubahan")); // short label on phones
     up.type = "button";
     up.title = `Simpan setelan sekarang ke "${s.name}"`;
     up.onclick = () => { updateSong(s.id, nowSettings()); toast(`"${s.name}" diperbarui`, { ms: 2000 }); };

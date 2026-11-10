@@ -1078,7 +1078,13 @@ div.sheet:not([hidden]) { flex: 1; min-height: 300px; display: flex; flex-direct
 
 /* ------------------------------------------------------------------ metronome */
 .nav-item[data-nav="metro"].active { background: var(--metro-soft); color: var(--metro); }
-.metro-wrap { max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+/* two columns when there is room: metronome left, song list right */
+#view-metro { container-type: inline-size; }
+.metro-wrap { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 14px; align-items: start; }
+.metro-main { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+@container (max-width: 680px) {
+  .metro-wrap { max-width: 640px; grid-template-columns: minmax(0, 1fr); }
+}
 .metro-card { padding: 24px 20px 18px; display: flex; flex-direction: column; align-items: center; gap: 18px; }
 .metro-card .ear-small { margin: 0; }
 /* beat dots */
@@ -1114,7 +1120,8 @@ div.sheet:not([hidden]) { flex: 1; min-height: 300px; display: flex; flex-direct
 .metro-tap.hit { animation: metro-pop .15s ease-out; border-color: var(--metro); }
 /* options */
 /* saved songs */
-.metro-songs { padding: 14px 18px 16px; display: flex; flex-direction: column; gap: 10px; }
+.metro-songs { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px; position: sticky; top: 16px; }
+@container (max-width: 680px) { .metro-songs { position: static; } }
 .metro-songs-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .metro-songs-head h3 { font-size: 1rem; }
 .metro-songs-nav { display: flex; gap: 4px; }
@@ -1123,36 +1130,27 @@ div.sheet:not([hidden]) { flex: 1; min-height: 300px; display: flex; flex-direct
 .metro-song { display: flex; align-items: center; gap: 6px; border-radius: 10px; border: 1px solid transparent; padding-right: 4px; }
 .metro-song.on { border-color: var(--metro); background: color-mix(in srgb, var(--metro) 10%, transparent); }
 .metro-song-main {
-  flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 0; background: none;
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 8px 8px; border: 0; background: none;
   color: var(--ink); font: inherit; text-align: left; cursor: pointer; border-radius: 10px;
 }
 .metro-song:not(.on) .metro-song-main:hover { background: var(--surface-2); }
 .metro-song-n { width: 20px; flex: none; text-align: right; font: 600 .8rem var(--f-mono); color: var(--muted); }
 .metro-song.on .metro-song-n { color: var(--metro); }
-.metro-song-text { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 10px; }
+.metro-song-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .metro-song-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.metro-song-meta { flex: none; font: .78rem var(--f-mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.metro-song-meta { flex: none; font: .72rem var(--f-mono); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .metro-song-save { flex: none; font-size: .78rem; padding: 5px 10px; color: var(--metro); border-color: var(--metro); }
 .metro-song-rename {
   flex: 1; min-width: 0; margin: 4px 0; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--metro);
   background: var(--surface-2); color: var(--ink); font: inherit;
 }
-.metro-song-add { display: flex; gap: 8px; }
+.metro-song-add { display: flex; flex-direction: column; gap: 8px; }
 .metro-song-add input {
   flex: 1; min-width: 0; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line);
   background: var(--surface-2); color: var(--ink); font: inherit;
 }
 .metro-song-add input:focus { outline: none; border-color: var(--metro); }
 .metro-song-add .btn { flex: none; }
-@media (max-width: 520px) {
-  .metro-song-text { flex-direction: column; align-items: stretch; gap: 1px; }
-  .metro-song-meta { font-size: .72rem; }
-  .metro-song-main { gap: 8px; padding: 8px 6px; }
-}
-@media (max-width: 420px) {
-  .metro-song-save .wide-only { display: none; }
-  .metro-song-add { flex-direction: column; }
-}
 .metro-opts { padding: 8px 18px; }
 .metro-row { display: flex; align-items: center; gap: 14px; padding: 10px 0; flex-wrap: wrap; }
 .metro-row + .metro-row { border-top: 1px solid var(--line); }

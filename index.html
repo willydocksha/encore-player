@@ -558,28 +558,37 @@
           <button class="btn danger metro-sync-end" type="button" id="metroSyncEnd" title="Akhiri sync" hidden><svg><use href="#i-x"/></svg><span>Akhiri</span></button>
         </div>
       </header>
+      <!-- two columns: metronome and its settings on the left, saved songs on the right (stacked on narrow screens) -->
       <div class="metro-wrap">
-        <section class="card metro-card" id="metroCard">
-          <div class="metro-beats" id="metroBeats"></div>
-          <div class="metro-tempo">
-            <button class="icon-btn lg" type="button" id="metroMinus" title="Pelankan 1 BPM (↓)"><svg><use href="#i-down"/></svg></button>
-            <div class="metro-bpm">
-              <span class="metro-flash" id="metroFlash"></span>
-              <b id="metroBpm">100</b>
-              <span class="metro-unit">BPM · <i id="metroTerm"></i></span>
-              <span class="metro-count" id="metroCount"></span>
+        <div class="metro-main">
+          <section class="card metro-card" id="metroCard">
+            <div class="metro-beats" id="metroBeats"></div>
+            <div class="metro-tempo">
+              <button class="icon-btn lg" type="button" id="metroMinus" title="Pelankan 1 BPM (↓)"><svg><use href="#i-down"/></svg></button>
+              <div class="metro-bpm">
+                <span class="metro-flash" id="metroFlash"></span>
+                <b id="metroBpm">100</b>
+                <span class="metro-unit">BPM · <i id="metroTerm"></i></span>
+                <span class="metro-count" id="metroCount"></span>
+              </div>
+              <button class="icon-btn lg" type="button" id="metroPlus" title="Cepatkan 1 BPM (↑)"><svg><use href="#i-up"/></svg></button>
             </div>
-            <button class="icon-btn lg" type="button" id="metroPlus" title="Cepatkan 1 BPM (↑)"><svg><use href="#i-up"/></svg></button>
-          </div>
-          <input class="metro-slider" type="range" id="metroSlider" min="30" max="300" step="1" aria-label="Tempo (BPM)">
-          <div class="metro-acts">
-            <button class="btn metro-tap" type="button" id="metroTap" title="Ketuk beberapa kali mengikuti lagu (T)">Tap tempo</button>
-            <button class="btn primary lg" type="button" id="metroToggle"><svg><use href="#i-play"/></svg><span>Mulai</span></button>
-          </div>
-          <p class="ear-small center">Klik titik ketukan untuk ganti: <b>aksen</b>, biasa, atau diam.</p>
-        </section>
+            <input class="metro-slider" type="range" id="metroSlider" min="30" max="300" step="1" aria-label="Tempo (BPM)">
+            <div class="metro-acts">
+              <button class="btn metro-tap" type="button" id="metroTap" title="Ketuk beberapa kali mengikuti lagu (T)">Tap tempo</button>
+              <button class="btn primary lg" type="button" id="metroToggle"><svg><use href="#i-play"/></svg><span>Mulai</span></button>
+            </div>
+            <p class="ear-small center">Klik titik ketukan untuk ganti: <b>aksen</b>, biasa, atau diam.</p>
+          </section>
+          <section class="card metro-opts">
+            <div class="metro-row"><span>Birama</span><div class="tuner-inst" id="metroSig"></div></div>
+            <div class="metro-row"><span>Ketukan</span><div class="seg" id="metroSub"></div></div>
+            <div class="metro-row"><span>Suara</span><div class="seg" id="metroSound"></div></div>
+            <div class="metro-row"><span>Volume</span><input type="range" id="metroVol" min="0" max="1" step="0.05" aria-label="Volume metronome"></div>
+          </section>
+        </div>
         <!-- saved songs: one tap brings back a song's tempo and signature -->
-        <section class="card metro-songs" id="metroSongsCard">
+        <aside class="card metro-songs" id="metroSongsCard">
           <header class="metro-songs-head">
             <h3>Daftar lagu</h3>
             <div class="metro-songs-nav">
@@ -593,13 +602,7 @@
             <input id="metroSongName" type="text" maxlength="60" autocomplete="off" placeholder="Nama lagu, mis. Lagu A" aria-label="Nama lagu">
             <button class="btn primary" type="submit"><svg><use href="#i-plus"/></svg>Simpan setelan ini</button>
           </form>
-        </section>
-        <section class="card metro-opts">
-          <div class="metro-row"><span>Birama</span><div class="tuner-inst" id="metroSig"></div></div>
-          <div class="metro-row"><span>Ketukan</span><div class="seg" id="metroSub"></div></div>
-          <div class="metro-row"><span>Suara</span><div class="seg" id="metroSound"></div></div>
-          <div class="metro-row"><span>Volume</span><input type="range" id="metroVol" min="0" max="1" step="0.05" aria-label="Volume metronome"></div>
-        </section>
+        </aside>
       </div>
     </section>
   </main>
