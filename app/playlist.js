@@ -563,20 +563,33 @@ function nudgeVol(d) {
 // ------------------------------------------------------------------ equalizer (drive audio only)
 // the <audio> element is routed through web audio filters. youtube plays inside its own iframe, so it can't be touched.
 // the graph is only built once the eq leaves flat: a routed element goes silent while its context is suspended.
+// 10 octave bands, shelves at both ends
 const EQ_BANDS = [
-  { f: 80, type: "lowshelf", label: "80" },
-  { f: 250, type: "peaking", label: "250" },
-  { f: 1000, type: "peaking", label: "1k" },
-  { f: 4000, type: "peaking", label: "4k" },
-  { f: 12000, type: "highshelf", label: "12k" },
-];
+  [31, "31"], [62, "62"], [125, "125"], [250, "250"], [500, "500"],
+  [1000, "1k"], [2000, "2k"], [4000, "4k"], [8000, "8k"], [16000, "16k"],
+].map(([f, label], i, all) => ({ f, label, type: i === 0 ? "lowshelf" : i === all.length - 1 ? "highshelf" : "peaking" }));
 const EQ_PRESETS = {
-  flat: { name: "Flat", g: [0, 0, 0, 0, 0] },
-  bassUp: { name: "Bass +", g: [6, 3, 0, 0, 0] },
-  bassCut: { name: "Tanpa bass", g: [-12, -8, 0, 0, 0] },
-  vocal: { name: "Vokal", g: [-3, -1, 3, 4, 1] },
+  flat: { name: "Flat", g: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+  bassUp: { name: "Bass +", g: [6, 6, 4, 2, 0, 0, 0, 0, 0, 0] },
+  bassCut: { name: "Tanpa bass", g: [-12, -12, -10, -6, -2, 0, 0, 0, 0, 0] },
+  vocal: { name: "Vokal", g: [-3, -3, -2, -1, 1, 3, 4, 3, 1, 0] },
 };
-let eqGains = store.get("lp-eq", EQ_PRESETS.flat.g);
+// old saves had 5 bands (80, 250, 1k, 4k, 12k): take the nearest old band for each new one
+function eqLoad() {
+  const g = store.get("lp-eq", EQ_PRESETS.flat.g);
+  if (Array.isArray(g) && g.length === EQ_BANDS.length) return g;
+  if (!Array.isArray(g) || g.length !== 5) return EQ_PRESETS.flat.g;
+  // an old preset becomes the same preset in 10 bands
+  const oldPresets = { bassUp: [6, 3, 0, 0, 0], bassCut: [-12, -8, 0, 0, 0], vocal: [-3, -1, 3, 4, 1] };
+  const k = Object.keys(oldPresets).find((p) => oldPresets[p].every((x, i) => x === g[i]));
+  if (k) return EQ_PRESETS[k].g;
+  const old = [80, 250, 1000, 4000, 12000];
+  return EQ_BANDS.map(({ f }) => {
+    const d = old.map((o) => Math.abs(Math.log2(f / o)));
+    return g[d.indexOf(Math.min(...d))];
+  });
+}
+let eqGains = eqLoad();
 let eqCtx = null, eqNodes = null, eqPre = null, normGain = null, limiter = null, meter = null, shifter = null;
 const eqFlat = () => eqGains.every((g) => !g);
 
@@ -589,7 +602,7 @@ function eqGraph() {
     eqPre = eqCtx.createGain();
     eqNodes = EQ_BANDS.map((b) => {
       const n = eqCtx.createBiquadFilter();
-      n.type = b.type; n.frequency.value = b.f; n.Q.value = 1;
+      n.type = b.type; n.frequency.value = b.f; n.Q.value = 1.4;
       return n;
     });
     // auto volume: per-song gain, then a limiter so boosted songs don't clip

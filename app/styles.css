@@ -332,20 +332,23 @@ select { background: var(--surface-2); border: 1px solid var(--line); border-rad
 .stepper .pill { width: auto; height: auto; border-radius: 999px; font-size: .78rem; padding: 6px 12px; }
 .stepper button:disabled { opacity: .45; cursor: default; border-color: var(--line); }
 .pitch.off .stepper { opacity: .45; pointer-events: none; }
-.vol { display: flex; align-items: center; gap: 10px; color: var(--muted); }
-.vol input { flex: 1; }
-.vol-btn { width: 30px; height: 30px; margin: -4px -4px -4px -6px; color: var(--muted); }
+/* volume: vertical master fader at the right end of the eq */
+.vol-btn { width: 30px; height: 30px; color: var(--muted); }
 .vol-btn.on { color: var(--danger); }
-/* auto volume toggle under the slider */
-.vol-auto { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
-.vol-auto .tool-hint { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
-/* equalizer: full-width card with vertical band sliders */
+/* equalizer: full-width card, ratakan volume next to the title */
 .tools .tool.eq { grid-column: 1 / -1; }
-@media (min-width: 1101px) { .tools .tool.eq { grid-column: span 2; } }
-.eq-bands { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.eq-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.eq-title .pill { font-size: .78rem; padding: 5px 12px; }
+.eq .tool-head > .tool-val { white-space: nowrap; }
+.eq-title .tool-hint { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+/* bands on the left, a divider, then the volume fader */
+.eq-mix { display: flex; gap: 10px; align-items: stretch; }
+.eq-bands { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; }
 .eq-band { display: flex; flex-direction: column; align-items: center; gap: 4px; font: .72rem var(--f-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
 .eq-band input { writing-mode: vertical-lr; direction: rtl; height: 96px; width: 24px; margin: 0; }
 .eq-band b { font-weight: 500; color: var(--ink); }
+.eq-vol { flex: none; width: 44px; padding-left: 10px; border-left: 1px solid var(--line); }
+.eq-vol .vol-btn { margin-top: -6px; }
 .eq.off .eq-bands { opacity: .45; }
 
 .queue-card { padding: 16px 10px 10px; position: sticky; top: 20px; max-height: calc(100vh - 40px); display: flex; flex-direction: column; }
