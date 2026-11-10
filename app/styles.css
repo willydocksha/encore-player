@@ -1133,6 +1133,9 @@ div.sheet:not([hidden]) { flex: 1; min-height: 300px; display: flex; flex-direct
   .nav-item { font-size: .64rem; letter-spacing: -.01em; }
 }
 /* metronome sync */
+/* sync pill plus a quick end button beside it */
+.metro-sync-bar { display: flex; gap: 8px; align-items: center; }
+.metro-sync-end[hidden] { display: none; }
 .metro-sync-btn.on { border-color: var(--metro); color: var(--metro); }
 .metro-sync-btn.on.linked::after { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); margin-left: 2px; }
 .sync-pick { display: flex; flex-direction: column; gap: 10px; }

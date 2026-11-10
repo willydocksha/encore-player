@@ -440,6 +440,7 @@ function renderSync() {
   $("#syncFollow").hidden = role !== "follower";
   $("#syncShared").hidden = !role;
   $("#syncEnd").hidden = !role;
+  $("#metroSyncEnd").hidden = !role;
   if (role === "host") {
     $("#syncCode").textContent = sync.code;
     $("#syncPeers").textContent = sync.peers ? `${sync.peers} perangkat mengikuti` : "Belum ada yang mengikuti";
@@ -517,6 +518,8 @@ export function initMetronome() {
   };
   $("#syncCodeIn").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); $("#syncJoin").click(); } };
   $("#syncEnd").onclick = () => { leave(); held = false; renderSync(); };
+  // same end action straight from the page header, no need to open the dialog
+  $("#metroSyncEnd").onclick = () => $("#syncEnd").click();
   $("#syncCopy").onclick = async () => {
     try { await navigator.clipboard.writeText(joinUrl()); toast("Link sync disalin"); } catch { toast(joinUrl()); }
   };
