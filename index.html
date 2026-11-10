@@ -61,6 +61,7 @@
     <symbol id="i-ear" viewBox="0 0 24 24"><path d="M7 9a5 5 0 0 1 10 0c0 3-2.5 3.8-3.2 6-.5 1.6-1.4 3.5-3.8 3.5A2.8 2.8 0 0 1 7.2 16M10 9.5a2 2 0 0 1 4 0c0 1.2-1.2 1.6-1.6 2.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-tuner" viewBox="0 0 24 24"><path d="M9 3v7a3 3 0 0 0 6 0V3M12 13v8M9 21h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-metro" viewBox="0 0 24 24"><path d="M9.5 3h5l4.5 18H5zM12 16l5-10M7 16.5h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-sync" viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.5M20 4v4.5h-4.5M20 12a8 8 0 0 1-13.7 5.6L4 15.5M4 20v-4.5h4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
     <symbol id="i-mac" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 20h8M12 16v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   </defs>
@@ -552,6 +553,7 @@
           <p class="eyebrow">Metronome</p>
           <h1>Jaga tempo latihanmu</h1>
         </div>
+        <button class="btn metro-sync-btn" type="button" id="metroSyncBtn" title="Samakan ketukan dengan perangkat lain (S)"><svg><use href="#i-sync"/></svg><span>Sync</span></button>
       </header>
       <div class="metro-wrap">
         <section class="card metro-card" id="metroCard">
@@ -607,6 +609,58 @@ https://youtu.be/…"></textarea>
 </dialog>
 
 <!-- change a song's link -->
+<!-- metronome sync: lead (show qr / code) or follow (enter code, or open the qr link) -->
+<dialog class="sheet small" id="metroSync">
+  <form method="dialog" class="sheet-inner">
+    <header class="sheet-head">
+      <h2>Sync metronome</h2>
+      <button class="icon-btn" value="cancel" aria-label="Tutup"><svg><use href="#i-x"/></svg></button>
+    </header>
+    <div id="syncPick" class="sync-pick">
+      <p>Samakan ketukan di beberapa perangkat. Pilih peran perangkat ini:</p>
+      <button class="sync-choice" type="button" id="syncLead">
+        <b>Diikuti</b>
+        <span>Perangkat ini jadi patokan. Muncul QR dan kode untuk perangkat lain.</span>
+      </button>
+      <div class="sync-choice as-form">
+        <b>Mengikuti</b>
+        <span>Scan QR di perangkat patokan pakai kamera HP, atau ketik kodenya di sini:</span>
+        <div class="sync-join">
+          <input id="syncCodeIn" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="8" placeholder="Ketik kode, mis. K7P2Q" aria-label="Kode sync">
+          <button class="btn primary" type="button" id="syncJoin">Ikuti</button>
+        </div>
+      </div>
+    </div>
+    <div id="syncHost" class="sync-host" hidden>
+      <div class="sync-qr" id="syncQr"></div>
+      <div class="sync-code-row">
+        <span class="ear-small">Kode</span>
+        <b id="syncCode" class="sync-code"></b>
+      </div>
+      <button class="link-btn sync-link" type="button" id="syncCopy" title="Salin link"><span id="syncLink"></span></button>
+      <p class="sync-peers" id="syncPeers"></p>
+      <p class="ear-small" id="syncHostStatus"></p>
+    </div>
+    <div id="syncFollow" class="sync-follow" hidden>
+      <p>Mengikuti <b id="syncFollowCode"></b></p>
+      <p class="sync-status" id="syncFollowStatus"></p>
+      <button class="btn primary" type="button" id="syncWake" hidden>Ketuk untuk menyalakan suara</button>
+    </div>
+    <div id="syncShared" class="sync-shared" hidden>
+      <p class="ear-small">Tempo, birama, ketukan, aksen, dan Mulai/Stop ikut berubah di semua perangkat, siapa pun yang mengubah. Suara dan volume tetap per perangkat.</p>
+      <label class="sync-lat">
+        <span>Geser suara perangkat ini <b id="syncLatencyVal"></b></span>
+        <input type="range" id="syncLatency" min="-300" max="300" step="5" aria-label="Geser suara (ms)">
+      </label>
+      <p class="ear-small">Pakai speaker / headset Bluetooth? Klik terdengar telat. Geser ke kanan sampai pas dengan perangkat lain. <button class="link-btn" type="button" id="syncLatencyReset">Reset</button></p>
+    </div>
+    <footer class="sheet-foot">
+      <button class="btn danger" type="button" id="syncEnd" hidden>Akhiri sync</button>
+      <button class="btn" value="cancel">Tutup</button>
+    </footer>
+  </form>
+</dialog>
+
 <dialog class="sheet small" id="relink">
   <form method="dialog" class="sheet-inner">
     <header class="sheet-head">
@@ -790,6 +844,7 @@ https://youtu.be/…"></textarea>
           <dt><kbd>Space</kbd></dt><dd>mulai / stop</dd>
           <dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>tempo ±1 BPM (Shift ±5)</dd>
           <dt><kbd>T</kbd></dt><dd>tap tempo</dd>
+          <dt><kbd>S</kbd></dt><dd>sync dengan perangkat lain</dd>
           <dt><kbd>1</kbd>–<kbd>4</kbd></dt><dd>ketukan ♩ / ♫ / triol / ♬</dd>
         </dl>
       </div>

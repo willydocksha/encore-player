@@ -1,12 +1,15 @@
-// metronome: web audio lookahead scheduler (sample accurate clicks), beat dots, tap tempo.
+// metronome: web audio lookahead scheduler (sample accurate clicks), beat dots, tap tempo, sync.
+// timing is a timeline: step n sounds at anchor + n * step length, in the leader's clock (ms).
 // clicks are scheduled ~120 ms ahead on the audio clock; the screen follows with requestAnimationFrame.
 
-import { $, $$, el, store, media, onKeys, router } from "./core.js";
+import { $, $$, el, store, media, onKeys, router, toast } from "./core.js";
+import { sync, clock, initSync, lead, follow, leave, broadcast, request, joinUrl, qrSvg, cleanCode, setLatency } from "./metrosync.js";
 
 const MIN_BPM = 30, MAX_BPM = 300;
 const LOOKAHEAD = 0.12; // seconds of audio scheduled ahead
 const LOOKAHEAD_HIDDEN = 1.5; // background tabs wake timers about once a second
 const TICK_MS = 25; // how often the scheduler wakes up
+const SYNC_LEAD = 350; // ms: changes from the leader take effect this late, so followers get them in time
 
 // time signatures: beats per bar, and the note value that gets the beat
 const SIGS = [
@@ -51,9 +54,12 @@ let vol = store.get("metro-vol", 0.8);
 let accents = loadAccents();
 
 let ctx = null, master = null, noise = null;
-let playing = false, raf = 0, worker = null;
-let nextTime = 0, step = 0; // step counts subdivisions inside the bar
-let queue = []; // { time, beat, sub } waiting to be shown
+let playing = false; // shared: the beat is running (on every synced device)
+let held = false; // synced only: this device went quiet (left the page, other audio) without stopping the others
+let raf = 0, worker = null, running = false; // running: the scheduler is ticking
+let anchor = 0, n = 0, lastSched = -Infinity; // timeline, see top
+let mapD = null; // audio clock minus performance clock (s), smoothed
+let queue = []; // { time, beat, part } waiting to be shown
 let taps = [];
 
 function clampBpm(v) { return Math.max(MIN_BPM, Math.min(MAX_BPM, Math.round(v) || 100)); }
@@ -119,6 +125,43 @@ function click(time, level) {
   o.stop(time + len + 0.01);
 }
 
+// ------------------------------------------------------------------ timeline
+
+const stepMs = () => 60000 / bpm / sub;
+const hostNow = () => clock() + sync.offset;
+const barLen = () => sig.beats * sub;
+
+// keep the audio clock <-> performance clock mapping fresh; output timestamps include the speaker delay
+function updateMap() {
+  let d;
+  const ts = ctx.getOutputTimestamp?.();
+  if (ts && ts.performanceTime > 0 && ts.contextTime > 0) d = ts.contextTime - ts.performanceTime / 1000;
+  else d = ctx.currentTime - performance.now() / 1000 - (ctx.outputLatency || ctx.baseLatency || 0);
+  mapD = mapD == null || Math.abs(d - mapD) > 0.03 ? d : mapD + (d - mapD) * 0.05;
+}
+
+// audio clock time at which a leader-clock moment should come out of this device's speaker
+function ctxAt(hostMs) {
+  const perfMs = hostMs - sync.offset - performance.timeOrigin - sync.latency;
+  return perfMs / 1000 + mapD;
+}
+
+// next step to schedule: after what is already queued, and not in the past
+function reindex() {
+  const base = Math.max(lastSched + stepMs() / 2, hostNow());
+  n = Math.max(0, Math.ceil((base - anchor) / stepMs()));
+}
+
+// first step at least `lead` ms from now (and after what is queued): changes take effect there
+function pivot(lead) {
+  const p = stepMs();
+  const base = Math.max(lastSched + p / 2, hostNow() + lead);
+  const i = Math.max(0, Math.ceil((base - anchor) / p));
+  return { i, t: anchor + i * p };
+}
+
+const changeLead = () => (sync.role === "host" && sync.peers ? SYNC_LEAD : 0);
+
 // ------------------------------------------------------------------ scheduler
 
 // ticks come from a worker: page timers get throttled hard when the tab is in the background
@@ -127,32 +170,37 @@ function ticker() {
   try {
     const src = `let t=0;onmessage=(e)=>{clearInterval(t);if(e.data>0)t=setInterval(()=>postMessage(0),e.data)}`;
     worker = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
-    worker.onmessage = () => playing && schedule();
+    worker.onmessage = () => audible() && schedule();
   } catch {
     // no workers: fall back to a plain interval
     let t = 0;
-    worker = { postMessage: (ms) => { clearInterval(t); if (ms > 0) t = setInterval(() => playing && schedule(), ms); } };
+    worker = { postMessage: (ms) => { clearInterval(t); if (ms > 0) t = setInterval(() => audible() && schedule(), ms); } };
   }
   return worker;
 }
 
+// a follower waits for its first clock measurement, otherwise it would start out of phase
+const audible = () => playing && !held && !!ctx && (sync.role !== "follower" || sync.rtt != null);
+
 function schedule() {
+  updateMap();
   const ahead = document.hidden ? LOOKAHEAD_HIDDEN : LOOKAHEAD;
-  // woke up too late (tab was throttled): skip the missed clicks instead of playing them all at once
-  const late = ctx.currentTime - nextTime;
-  if (late > 0.05) {
-    const per = 60 / bpm / sub, skip = Math.ceil(late / per);
-    nextTime += skip * per;
-    step = (step + skip) % (sig.beats * sub);
-  }
-  while (nextTime < ctx.currentTime + ahead) {
-    const beat = Math.floor(step / sub), part = step % sub;
-    const lvl = accents[beat] ?? 1;
-    // a silent beat also silences its subdivisions
-    if (lvl > 0) click(nextTime, part === 0 ? lvl : 0.5);
-    queue.push({ time: nextTime, beat, part });
-    nextTime += 60 / bpm / sub;
-    step = (step + 1) % (sig.beats * sub);
+  const now = ctx.currentTime, p = stepMs(), L = barLen();
+  // woke up too late (tab was throttled, or joined mid-song): skip the missed clicks instead of playing them all at once
+  const behind = now - ctxAt(anchor + n * p);
+  if (behind > 0.05) n += Math.ceil(behind / (p / 1000));
+  for (;;) {
+    const host = anchor + n * p, t = ctxAt(host);
+    if (t > now + ahead) break;
+    if (t >= now - 0.01) {
+      const k = n % L, beat = Math.floor(k / sub), part = k % sub;
+      const lvl = accents[beat] ?? 1;
+      // a silent beat also silences its subdivisions
+      if (lvl > 0) click(t, part === 0 ? lvl : 0.5);
+      queue.push({ time: t, beat, part });
+    }
+    lastSched = host;
+    n++;
   }
 }
 
@@ -168,7 +216,7 @@ function frame() {
     d.classList.toggle("now", i === cur.beat);
     if (i === cur.beat && cur.part === 0) { d.classList.remove("hit"); void d.offsetWidth; d.classList.add("hit"); }
   });
-  $("#metroCount").textContent = cur.part === 0 ? String(cur.beat + 1) : SYLLABLES[sub][cur.part];
+  $("#metroCount").textContent = cur.part === 0 ? String(cur.beat + 1) : SYLLABLES[sub][cur.part] || "";
   if (cur.part === 0) {
     const flash = $("#metroFlash");
     flash.classList.toggle("accent", (accents[cur.beat] ?? 1) === 2);
@@ -176,61 +224,112 @@ function frame() {
   }
 }
 
-function start() {
-  ensureAudio();
-  ctx.resume();
-  media.claim("metro");
-  playing = true;
-  step = 0;
-  queue = [];
-  nextTime = ctx.currentTime + 0.06;
-  schedule();
-  ticker().postMessage(TICK_MS);
-  cancelAnimationFrame(raf);
-  frame();
+// start or stop the local sound to match playing / held
+function runAudio() {
+  running = audible();
+  if (running) {
+    if (ctx.state !== "running") ctx.resume();
+    reindex();
+    schedule();
+    ticker().postMessage(TICK_MS);
+    cancelAnimationFrame(raf);
+    frame();
+  } else {
+    worker?.postMessage(0);
+    cancelAnimationFrame(raf);
+    queue = [];
+    lastSched = -Infinity;
+  }
   render();
 }
 
-function stop() {
-  if (!playing) return;
-  playing = false;
-  worker?.postMessage(0);
-  cancelAnimationFrame(raf);
-  queue = [];
-  render();
+// ------------------------------------------------------------------ changes
+
+// every change goes through here: followers ask the leader, the leader (or a solo device) applies and shares
+function act(p) {
+  if (sync.role === "follower") { request(p); return; }
+  applyChange(p);
+  broadcast();
 }
 
-// restart the bar from beat 1 (after the signature or subdivision changed)
-function restartBar() {
-  if (!playing) return;
-  step = 0;
-  queue = [];
-  nextTime = ctx.currentTime + 0.06;
+function applyChange(p) {
+  const was = audible();
+  // relative steps (+/-, arrows) stay correct when several arrive before the echo
+  if (typeof p.bpmBy === "number") p = { ...p, bpm: bpm + p.bpmBy };
+  if ("bpm" in p) {
+    const b = clampBpm(p.bpm);
+    if (playing && b !== bpm) {
+      // keep the beat position: the pivot step stays where it is, later steps use the new tempo
+      const pv = pivot(changeLead());
+      anchor = pv.t - pv.i * (60000 / b / sub);
+    }
+    bpm = b;
+  }
+  if ("sig" in p || "sub" in p) {
+    const s = SIGS.find((x) => x.id === p.sig) || sig;
+    const u = [1, 2, 3, 4].includes(p.sub) ? p.sub : sub;
+    if (s !== sig || u !== sub) {
+      // a new bar starts at the pivot
+      if (playing) anchor = pivot(changeLead()).t;
+      if (s !== sig) { sig = s; accents = loadAccents(); }
+      sub = u;
+    }
+  }
+  if (Array.isArray(p.accents) && p.accents.length === sig.beats) accents = p.accents.map((v) => (v === 2 || v === 0 ? v : 1));
+  if ("playing" in p && p.playing !== playing) {
+    playing = !!p.playing;
+    if (playing) {
+      // start a little ahead: covers the speaker delay, and the network when others follow
+      ensureAudio();
+      anchor = hostNow() + Math.max(sync.role === "host" && sync.peers ? SYNC_LEAD : 80, (ctx.outputLatency || 0) * 1000 + 60);
+      lastSched = -Infinity;
+      n = 0;
+      media.claim("metro");
+    }
+  }
+  persist();
+  if (audible() !== was || "playing" in p) runAudio();
+  else { if (audible()) reindex(); render(); }
 }
 
-// ------------------------------------------------------------------ settings
+// follower: take the leader's state as is
+function applyShared(s) {
+  const was = audible();
+  bpm = clampBpm(s.bpm);
+  sig = SIGS.find((x) => x.id === s.sig) || sig;
+  sub = [1, 2, 3, 4].includes(s.sub) ? s.sub : 1;
+  accents = Array.isArray(s.accents) && s.accents.length === sig.beats ? s.accents : loadAccents();
+  anchor = +s.anchor || 0;
+  const startNow = !!s.playing && !playing;
+  playing = !!s.playing;
+  persist();
+  if (startNow) {
+    ensureAudio();
+    lastSched = -Infinity;
+    if (ctx.state !== "running") ctx.resume().catch(() => {});
+    if (router.current === "metro") media.claim("metro");
+  }
+  if (audible() !== was || startNow) runAudio();
+  else { if (audible()) reindex(); render(); }
+}
 
-function setBpm(v) {
-  bpm = clampBpm(v);
+function sharedState() {
+  return { bpm, sig: sig.id, sub, accents, playing, anchor };
+}
+
+function persist() {
   store.set("metro-bpm", bpm);
-  $("#metroBpm").textContent = bpm;
-  $("#metroTerm").textContent = term(bpm);
-  $("#metroSlider").value = bpm;
+  store.set("metro-sig", sig.id);
+  store.set("metro-sub", sub);
+  saveAccents();
 }
 
-function setSig(s) {
-  sig = s;
-  store.set("metro-sig", s.id);
-  accents = loadAccents();
-  restartBar();
-  render();
-}
-
-function setSub(n) {
-  sub = n;
-  store.set("metro-sub", n);
-  restartBar();
-  render();
+function toggle() {
+  // the play button also wakes a held device back up
+  if (playing && held) { held = false; ensureAudio(); runAudio(); return; }
+  ensureAudio();
+  if (ctx.state !== "running") ctx.resume();
+  act({ playing: !playing });
 }
 
 // tap tempo: average of the last few gaps, a long pause starts over
@@ -243,13 +342,29 @@ function tap() {
   btn.classList.remove("hit"); void btn.offsetWidth; btn.classList.add("hit");
   if (taps.length < 2) return;
   const gaps = taps.slice(1).map((t, i) => t - taps[i]);
-  setBpm(60000 / (gaps.reduce((a, b) => a + b, 0) / gaps.length));
+  act({ bpm: 60000 / (gaps.reduce((a, b) => a + b, 0) / gaps.length) });
+}
+
+// slider: show the number right away, send at most every 80 ms while dragging
+let slideTimer = 0, slideVal = 0;
+function slide(v) {
+  slideVal = v;
+  showBpm(v);
+  if (slideTimer) return;
+  act({ bpm: v });
+  slideTimer = setTimeout(() => { slideTimer = 0; if (slideVal !== bpm) act({ bpm: slideVal }); }, 80);
 }
 
 // ------------------------------------------------------------------ render
 
+function showBpm(v) {
+  $("#metroBpm").textContent = v;
+  $("#metroTerm").textContent = term(v);
+  if (document.activeElement !== $("#metroSlider")) $("#metroSlider").value = v;
+}
+
 function render() {
-  setBpm(bpm);
+  showBpm(bpm);
 
   // beat dots, click cycles accent > normal > silent
   $("#metroBeats").replaceChildren(...accents.map((lvl, i) => {
@@ -258,9 +373,9 @@ function render() {
     b.title = `Ketukan ${i + 1}: ${lvl === 2 ? "aksen" : lvl === 1 ? "biasa" : "diam"} (klik untuk ganti)`;
     b.append(el("span", null, String(i + 1)));
     b.onclick = () => {
-      accents[i] = lvl === 2 ? 1 : lvl === 1 ? 0 : 2;
-      saveAccents();
-      render();
+      const next = accents.slice();
+      next[i] = lvl === 2 ? 1 : lvl === 1 ? 0 : 2;
+      act({ accents: next });
     };
     return b;
   }));
@@ -269,7 +384,7 @@ function render() {
     const b = el("button", `tuner-chip${s === sig ? " on" : ""}`, s.label);
     b.type = "button";
     b.title = s.beats === 1 ? "Tanpa birama: semua ketukan sama" : `Birama ${s.label}`;
-    b.onclick = () => setSig(s);
+    b.onclick = () => act({ sig: s.id });
     return b;
   }));
 
@@ -277,7 +392,7 @@ function render() {
     const b = el("button", s.n === sub ? "active" : "", s.label);
     b.type = "button";
     b.title = s.title;
-    b.onclick = () => setSub(s.n);
+    b.onclick = () => act({ sub: s.n });
     return b;
   }));
 
@@ -289,46 +404,137 @@ function render() {
       store.set("metro-sound", sound);
       render();
       // preview the new sound when stopped
-      if (!playing) { ensureAudio(); ctx.resume(); click(ctx.currentTime + 0.01, 2); }
+      if (!audible()) { ensureAudio(); ctx.resume(); click(ctx.currentTime + 0.01, 2); }
     };
     return b;
   }));
 
   $("#metroVol").value = vol;
 
+  const on = audible();
   const btn = $("#metroToggle");
-  btn.querySelector("use").setAttribute("href", playing ? "#i-stop" : "#i-play");
-  btn.lastChild.textContent = playing ? "Stop" : "Mulai";
-  btn.classList.toggle("on", playing);
-  $("#metroCard").classList.toggle("playing", playing);
-  if (!playing) {
+  btn.querySelector("use").setAttribute("href", on ? "#i-stop" : "#i-play");
+  btn.lastChild.textContent = on ? "Stop" : playing && held ? "Ikut lagi" : "Mulai";
+  btn.classList.toggle("on", on);
+  $("#metroCard").classList.toggle("playing", on);
+  if (!on) {
     $("#metroCount").textContent = "";
     $$("#metroBeats .metro-dot").forEach((d) => d.classList.remove("now", "hit"));
   }
+  renderSync();
 }
 
-export function enterMetronome() { render(); }
+// ------------------------------------------------------------------ sync ui
+
+function renderSync() {
+  const role = sync.role;
+  const pill = $("#metroSyncBtn");
+  pill.classList.toggle("on", !!role);
+  pill.classList.toggle("linked", sync.linked);
+  pill.lastChild.textContent = role === "host" ? `Sync · ${sync.peers} ikut` : role === "follower" ? `Ikut ${sync.code}` : "Sync";
+
+  const d = $("#metroSync");
+  d.dataset.role = role || "none";
+  $("#syncPick").hidden = !!role;
+  $("#syncHost").hidden = role !== "host";
+  $("#syncFollow").hidden = role !== "follower";
+  $("#syncShared").hidden = !role;
+  $("#syncEnd").hidden = !role;
+  if (role === "host") {
+    $("#syncCode").textContent = sync.code;
+    $("#syncPeers").textContent = sync.peers ? `${sync.peers} perangkat mengikuti` : "Belum ada yang mengikuti";
+    $("#syncHostStatus").textContent = sync.status;
+  }
+  if (role === "follower") {
+    $("#syncFollowCode").textContent = sync.code;
+    const ok = sync.linked;
+    $("#syncFollowStatus").textContent = sync.status + (ok && sync.rtt != null ? ` · ping ${Math.round(sync.rtt)} ms` : "");
+    $("#syncFollowStatus").classList.toggle("ok", ok);
+    // phones only make sound after a tap on the page
+    $("#syncWake").hidden = !(playing && (!ctx || ctx.state !== "running"));
+  }
+  $("#syncLatency").value = sync.latency;
+  $("#syncLatencyVal").textContent = `${sync.latency > 0 ? "+" : ""}${sync.latency} ms`;
+}
+
+let qrFor = "";
+async function showQr() {
+  const url = joinUrl();
+  $("#syncLink").textContent = url.replace(/^https?:\/\//, "");
+  if (qrFor === url) return;
+  qrFor = url;
+  try { $("#syncQr").innerHTML = await qrSvg(url); } catch { qrFor = ""; $("#syncQr").textContent = "QR gagal dimuat"; }
+}
+
+function onStatus() {
+  if (sync.role === "host" && sync.code) showQr();
+  // clock measured / sync ended: start or stop the local sound to match
+  if (audible() !== running) runAudio();
+  else renderSync();
+}
+
+export function enterMetronome(code) {
+  // back on the page: a held device joins the beat again
+  if (held) { held = false; if (playing) { ensureAudio(); runAudio(); } }
+  render();
+  if (code) {
+    // opened from a qr / link: follow that leader, then tidy the address
+    history.replaceState(null, "", "#/metronome");
+    if (sync.role !== "follower" || sync.code !== cleanCode(code)) follow(code);
+  }
+}
+
+// leaving the page / other audio: solo stops, a synced device only goes quiet here
+function quiet() {
+  if (!playing) return;
+  if (sync.role) { held = true; runAudio(); }
+  else act({ playing: false });
+}
 
 export function initMetronome() {
-  media.register("metro", stop);
-  $("#metroToggle").onclick = () => (playing ? stop() : start());
-  $("#metroMinus").onclick = () => setBpm(bpm - 1);
-  $("#metroPlus").onclick = () => setBpm(bpm + 1);
-  $("#metroSlider").oninput = (e) => setBpm(+e.target.value);
+  media.register("metro", quiet);
+  initSync({ state: sharedState, apply: applyShared, act: (p) => { applyChange(p); broadcast(); }, onStatus });
+  $("#metroToggle").onclick = toggle;
+  $("#metroMinus").onclick = () => act({ bpmBy: -1 });
+  $("#metroPlus").onclick = () => act({ bpmBy: 1 });
+  $("#metroSlider").oninput = (e) => slide(+e.target.value);
+  $("#metroSlider").onchange = (e) => { clearTimeout(slideTimer); slideTimer = 0; act({ bpm: +e.target.value }); };
   $("#metroTap").onclick = tap;
   $("#metroVol").oninput = (e) => {
     vol = +e.target.value;
     store.set("metro-vol", vol);
     if (master) master.gain.value = vol;
   };
-  // the click stops outside this page
-  window.addEventListener("hashchange", () => { if (router.current !== "metro") stop(); });
+
+  // sync dialog
+  $("#metroSyncBtn").onclick = () => { renderSync(); if (sync.role === "host") showQr(); $("#metroSync").showModal(); };
+  $("#syncLead").onclick = () => { lead(); renderSync(); };
+  $("#syncJoin").onclick = () => {
+    const c = cleanCode($("#syncCodeIn").value);
+    if (c.length < 4) { toast("Masukkan kode dari perangkat pemimpin", { error: true }); return; }
+    ensureAudio(); ctx.resume();
+    follow(c);
+  };
+  $("#syncCodeIn").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); $("#syncJoin").click(); } };
+  $("#syncEnd").onclick = () => { leave(); held = false; renderSync(); };
+  $("#syncCopy").onclick = async () => {
+    try { await navigator.clipboard.writeText(joinUrl()); toast("Link sync disalin"); } catch { toast(joinUrl()); }
+  };
+  $("#syncWake").onclick = () => { ensureAudio(); ctx.resume().then(() => runAudio()); };
+  $("#syncLatency").oninput = (e) => { setLatency(+e.target.value); renderSync(); };
+  $("#syncLatencyReset").onclick = () => { setLatency(0); renderSync(); };
+  // any tap wakes up the audio (phones block sound until the page is touched)
+  document.addEventListener("pointerdown", () => { if (ctx && ctx.state !== "running" && playing) ctx.resume().then(() => { if (audible()) runAudio(); }); }, true);
+
+  // the click stops (or goes quiet when synced) outside this page
+  window.addEventListener("hashchange", () => { if (router.current !== "metro") quiet(); });
   onKeys("metro", (e) => {
-    if (e.code === "Space") { e.preventDefault(); playing ? stop() : start(); return; }
-    if (e.key === "ArrowUp" || e.key === "ArrowRight") { e.preventDefault(); setBpm(bpm + (e.shiftKey ? 5 : 1)); return; }
-    if (e.key === "ArrowDown" || e.key === "ArrowLeft") { e.preventDefault(); setBpm(bpm - (e.shiftKey ? 5 : 1)); return; }
+    if (e.code === "Space") { e.preventDefault(); toggle(); return; }
+    if (e.key === "ArrowUp" || e.key === "ArrowRight") { e.preventDefault(); act({ bpmBy: e.shiftKey ? 5 : 1 }); return; }
+    if (e.key === "ArrowDown" || e.key === "ArrowLeft") { e.preventDefault(); act({ bpmBy: e.shiftKey ? -5 : -1 }); return; }
     if (e.key === "t" || e.key === "T") { tap(); return; }
-    const n = +e.key;
-    if (n >= 1 && n <= 4) setSub(n);
+    if (e.key === "s" || e.key === "S") { $("#metroSyncBtn").click(); return; }
+    const k = +e.key;
+    if (k >= 1 && k <= 4) act({ sub: k });
   });
 }

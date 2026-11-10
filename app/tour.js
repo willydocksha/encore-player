@@ -246,6 +246,11 @@ const tours = {
       text: "Pilih birama (4/4, 3/4, 6/8, ...), pecahan ketukan (♫ seperdelapan, triol, ♬ seperenambelas), jenis suara, dan volume. Semua pilihan diingat.",
     },
     {
+      target: "#metroSyncBtn",
+      title: "Sync dengan perangkat lain",
+      text: "Main bareng? Klik Sync. Satu perangkat pilih Diikuti dan menampilkan QR, perangkat lain scan QR-nya pakai kamera HP (atau ketik kodenya). Ketukannya jadi barengan, dan perubahan tempo, birama, atau Mulai/Stop dari perangkat mana pun ikut ke semua.",
+    },
+    {
       target: "#metroToggle",
       title: "Mulai",
       text: "Klik Mulai atau tekan Spasi. Metronome otomatis berhenti saat pindah halaman atau saat lagu di Playlist diputar.",

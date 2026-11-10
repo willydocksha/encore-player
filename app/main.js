@@ -13,7 +13,7 @@ import { checkAppUpdate } from "./appupdate.js";
 router.add(/^#\/?$/, "playlist", () => { leaveSong(); document.title = "Encore"; });
 router.add(/^#\/perfect-pitch\/?$/, "ear", () => { leaveSong(); enterEar(); document.title = "Perfect Pitch · Encore"; });
 router.add(/^#\/tuner\/?$/, "tuner", () => { leaveSong(); enterTuner(); document.title = "Tuner · Encore"; });
-router.add(/^#\/metronome\/?$/, "metro", () => { leaveSong(); enterMetronome(); document.title = "Metronome · Encore"; });
+router.add(/^#\/metronome\/?(?:\?sync=(\w+))?$/, "metro", (code) => { leaveSong(); enterMetronome(code); document.title = "Metronome · Encore"; });
 router.add(/^#\/breakdown\/?$/, "bass", () => enterBassHome());
 router.add(/^#\/breakdown\/(\w+)$/, "song", (id) => enterSong(id));
 // older links (ngulik, bass section, delve)

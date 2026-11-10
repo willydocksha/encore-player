@@ -1132,3 +1132,43 @@ div.sheet:not([hidden]) { flex: 1; min-height: 300px; display: flex; flex-direct
 @media (max-width: 420px) {
   .nav-item { font-size: .64rem; letter-spacing: -.01em; }
 }
+/* metronome sync */
+.metro-sync-btn.on { border-color: var(--metro); color: var(--metro); }
+.metro-sync-btn.on.linked::after { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); margin-left: 2px; }
+.sync-pick { display: flex; flex-direction: column; gap: 10px; }
+.sync-pick > p { margin: 0; color: var(--ink-2); }
+.sync-choice {
+  display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 12px 14px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font: inherit;
+}
+button.sync-choice { cursor: pointer; transition: border-color .15s; }
+button.sync-choice:hover { border-color: var(--metro); }
+.sync-choice b { font: 700 1rem var(--f-display); }
+.sync-choice span { font-size: .85rem; color: var(--muted); }
+.sync-join { display: flex; gap: 8px; margin-top: 6px; }
+.sync-join input {
+  flex: 1; min-width: 0; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface);
+  color: var(--ink); font: 600 1rem var(--f-mono); letter-spacing: .12em; text-transform: uppercase;
+}
+.sync-join input:focus { outline: none; border-color: var(--metro); }
+#metroSync .btn.primary { background: var(--metro); border-color: var(--metro); color: #fff; box-shadow: none; }
+.sync-host { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.sync-host p { margin: 0; }
+/* qr stays dark on white in both themes, cameras need the contrast */
+.sync-qr { width: 200px; height: 200px; padding: 6px; border-radius: 12px; background: #fff; display: grid; place-items: center; color: #333; font-size: .8rem; }
+.sync-qr svg { width: 100%; height: 100%; display: block; }
+.sync-code-row { display: flex; align-items: baseline; gap: 10px; }
+.sync-code { font: 700 1.8rem var(--f-mono); letter-spacing: .18em; color: var(--ink); }
+.sync-link { font-size: .78rem; color: var(--accent); word-break: break-all; text-align: center; }
+.sync-peers { font-weight: 600; color: var(--metro); }
+.sync-follow p { margin: 0; }
+.sync-follow { display: flex; flex-direction: column; gap: 6px; }
+.sync-status { font-size: .88rem; color: var(--muted); }
+.sync-status.ok { color: var(--ok); }
+.sync-shared { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+.sync-shared .ear-small { margin: 0; }
+.sync-lat { display: flex; flex-direction: column; gap: 6px; font-size: .85rem; color: var(--ink-2); }
+.sync-lat b { font-family: var(--f-mono); color: var(--metro); }
+.sync-lat input { width: 100%; accent-color: var(--metro); }
+.sync-shared .link-btn { font-size: .8rem; color: var(--accent); }
+.sync-join input::placeholder { text-transform: none; letter-spacing: 0; font: 400 .9rem var(--f-body); color: var(--muted); }
