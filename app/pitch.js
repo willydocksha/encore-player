@@ -15,13 +15,15 @@ async function loadModule(ctx) {
 }
 
 // a pitch-shift node for this context, or null when the browser has no audio worklets
-export async function pitchNode(ctx) {
+// semitones: starting shift, already active on the first render quantum
+export async function pitchNode(ctx, semitones = 0) {
   if (!ctx.audioWorklet) return null;
   if (!loaded.has(ctx)) loaded.set(ctx, loadModule(ctx));
   try { await loaded.get(ctx); } catch { loaded.delete(ctx); return null; }
   const node = new AudioWorkletNode(ctx, "pitch-shift", {
     numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2],
     channelCount: 2, channelCountMode: "explicit", channelInterpretation: "speakers",
+    processorOptions: { semitones },
   });
   // set semitones on the node
   node.setSemitones = (s) => node.port.postMessage({ semitones: s });

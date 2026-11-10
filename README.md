@@ -49,6 +49,8 @@ File Google Drive harus dibagikan sebagai **"Siapa saja yang memiliki link"**.
 - **Chord lengkap**: mayor/minor plus 7, maj7, m7, sus2, sus4, add9, dim, dan slash chord. Not bass ikut membantu (misalnya C dengan bass A dibaca Am7). Ambang batasnya sengaja konservatif
 - **MIDI** per bagian: bass, vokal, piano, gitar, drum
 - Loop dan speed tanpa ubah nada
+- **Click** (tombol `K`): metronome yang mengikuti beat hasil deteksi, jadi ikut tempo lagu yang naik-turun, dengan aksen di ketukan pertama tiap bar. **Hitung** memberi hitungan 1 bar sebelum lagu mulai, waktunya diatur supaya beat pertama lagu jatuh tepat setelah hitungan terakhir. Ikut speed dan loop
+- **Export audio**: centang satu atau beberapa versi sekaligus (sesuai mixer, minus one per instrumen, atau satu instrumen saja), tiap versi jadi satu MP3. Bisa ditambah click dan ikut nada yang sedang dipakai. Stem cukup didekode sekali untuk semua versi
 - Library (hasil analisis, stem, MIDI, audio asli) disimpan di komputer: `~/Library/Application Support/Encore` (Mac), `%APPDATA%\Encore` (Windows), `~/.local/share/encore` (Linux)
 - Lagu yang dianalisis dengan algoritma lama ditandai **versi lama**
 

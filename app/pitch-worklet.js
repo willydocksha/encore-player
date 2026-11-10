@@ -159,9 +159,10 @@ class Channel {
 
 // the node: stereo in, stereo out, semitones set over the port
 class PitchShift extends AudioWorkletProcessor {
-  constructor() {
+  constructor(options) {
     super();
-    this.ratio = 1;
+    // start shifted when asked (offline export renders before any port message arrives)
+    this.ratio = Math.pow(2, (Number(options?.processorOptions?.semitones) || 0) / 12);
     this.chans = [new Channel(), new Channel()];
     this.port.onmessage = (e) => {
       const ratio = Math.pow(2, (Number(e.data?.semitones) || 0) / 12);

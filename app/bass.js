@@ -422,6 +422,19 @@ function lowerBound(arr, x, key = (o) => o.t) {
   return lo;
 }
 
+// ------------------------------------------------------------------ click sound
+// short sine blip; higher on the first beat of a bar. works in live and offline contexts
+function clickSound(ctx, when, accent, vol) {
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.frequency.value = accent ? 1760 : 1175;
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.exponentialRampToValueAtTime(vol, when + 0.002);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + 0.05);
+  o.connect(g).connect(ctx.destination);
+  o.start(when);
+  o.stop(when + 0.06);
+}
+
 // ------------------------------------------------------------------ song player
 const player = (() => {
   const roll = $("#roll"), ov = $("#overview");
@@ -607,7 +620,7 @@ const player = (() => {
     $("#mixer").replaceChildren(...strips);
   }
 
-  // ---------------- export: render the chosen stems to one mp3
+  // ---------------- export: render one or more versions, each to its own mp3
   let exporting = false;
   function exportOptions() {
     if (!tracks.length) return [];
@@ -616,52 +629,97 @@ const player = (() => {
     const opts = [];
     if (heard.length && heard.length < tracks.length) {
       const off = tracks.filter((t) => !audible(t.name));
-      opts.push({ label: `Sesuai mixer (tanpa ${label(off)})`, list: heard, suffix: `tanpa ${label(off).toLowerCase()}` });
+      opts.push({ key: "mix", group: "Mixer", label: `Sesuai mixer (tanpa ${label(off)})`, list: heard, suffix: `tanpa ${label(off).toLowerCase()}` });
     }
     for (const t of tracks) {
       const rest = tracks.filter((x) => x !== t);
-      opts.push({ label: `Tanpa ${STEM_INFO[t.name].label}`, list: rest, suffix: `tanpa ${STEM_INFO[t.name].label.toLowerCase()}` });
+      opts.push({ key: `minus:${t.name}`, group: "Minus one", label: `Tanpa ${STEM_INFO[t.name].label}`, list: rest, suffix: `tanpa ${STEM_INFO[t.name].label.toLowerCase()}` });
     }
-    for (const t of tracks) opts.push({ label: `${STEM_INFO[t.name].label} saja`, list: [t], suffix: STEM_INFO[t.name].label.toLowerCase() });
+    for (const t of tracks) opts.push({ key: `only:${t.name}`, group: "Satu instrumen", label: `${STEM_INFO[t.name].label} saja`, list: [t], suffix: STEM_INFO[t.name].label.toLowerCase() });
     return opts;
   }
 
-  async function exportMix(list, suffix) {
+  // dialog with checkboxes; the last picks are remembered
+  function openExport() {
     if (exporting) return toast("Export sebelumnya masih jalan");
+    const opts = exportOptions();
+    if (!opts.length) return;
+    const saved = new Set(store.get("bass-export", ["minus:bass"]));
+    const boxes = [];
+    const groups = [...new Set(opts.map((o) => o.group))].map((g) => {
+      const box = el("div", "export-group");
+      const rows = el("div", "rows");
+      for (const o of opts.filter((x) => x.group === g)) {
+        const row = el("label", "check-row");
+        const cb = el("input");
+        cb.type = "checkbox"; cb.checked = saved.has(o.key); cb.dataset.key = o.key;
+        cb.onchange = count;
+        boxes.push(cb);
+        row.append(cb, o.label);
+        rows.append(row);
+      }
+      box.append(el("h3", null, g), rows);
+      return box;
+    });
+    $("#exportOpts").replaceChildren(...groups);
+    $("#exportClick").checked = !!store.get("bass-export-click", false);
+    $("#exportPitchRow").hidden = !pitch;
+    $("#exportPitch").checked = true;
+    $("#exportPitchLabel").textContent = `Ikut nada sekarang (${fmtSemis(pitch)})`;
+    // footer button shows how many files will be made
+    function count() {
+      const n = boxes.filter((b) => b.checked).length;
+      $("#exportGoLabel").textContent = n > 1 ? `Export ${n} file` : "Export";
+      $("#exportGo").disabled = !n;
+    }
+    count();
+    const d = $("#exportDialog");
+    d.returnValue = "";
+    d.showModal();
+    d.addEventListener("close", () => {
+      if (d.returnValue !== "ok") return;
+      const keys = boxes.filter((b) => b.checked).map((b) => b.dataset.key);
+      store.set("bass-export", keys);
+      store.set("bass-export-click", $("#exportClick").checked);
+      exportMany(opts.filter((o) => keys.includes(o.key)), {
+        withClick: $("#exportClick").checked,
+        semis: pitch && $("#exportPitch").checked ? pitch : 0,
+      });
+    }, { once: true });
+  }
+
+  // decode each stem once, then render + encode + download every chosen version in turn
+  async function exportMany(chosen, { withClick = false, semis = 0 } = {}) {
+    if (exporting || !chosen.length) return;
     exporting = true;
-    const done = toast("Menyiapkan file audio…", { ms: 600000 });
+    const done = toast("", { ms: 3600000 });
+    const toastText = document.querySelector("#toasts .toast:last-child .toast-text");
+    const say = (text) => { if (toastText) toastText.textContent = text; };
+    say("Menyiapkan file audio…");
+    const title = song.title;
+    const beats = song.beats, accents = barOf.slice();
     try {
       const SR = 44100;
       const decoder = new OfflineAudioContext(2, SR, SR);
-      const bufs = await Promise.all(list.map(async (t) => {
-        const bytes = await (await fetch(song.audioUrls[t.name])).arrayBuffer();
-        return { buf: await decoder.decodeAudioData(bytes), vol: t.vol };
-      }));
-      const len = Math.max(...bufs.map((b) => b.buf.length));
-      const ctx = new OfflineAudioContext(2, len, SR);
-      for (const { buf, vol } of bufs) {
-        const src = ctx.createBufferSource(), g = ctx.createGain();
-        src.buffer = buf; g.gain.value = vol;
-        src.connect(g).connect(ctx.destination);
-        src.start();
+      const cache = new Map(); // stem name -> decoded buffer
+      const buffer = async (name) => {
+        if (!cache.has(name)) cache.set(name, (async () => decoder.decodeAudioData(await (await fetch(song.audioUrls[name])).arrayBuffer()))());
+        return cache.get(name);
+      };
+      let made = 0;
+      for (const [i, o] of chosen.entries()) {
+        say(chosen.length > 1 ? `Export ${i + 1} dari ${chosen.length}: ${o.label}…` : `Export ${o.label}…`);
+        const bufs = await Promise.all(o.list.map(async (t) => ({ buf: await buffer(t.name), vol: t.vol })));
+        const out = await renderMix(bufs, SR, { semis, click: withClick ? { beats, accents, vol: click.vol } : null });
+        const bytes = await encode(out, SR);
+        const suffix = [o.suffix, semis ? `nada ${fmtSemis(semis)}` : "", withClick ? "click" : ""].filter(Boolean).join(", ");
+        download(bytes, `${safeName(title)} - ${suffix}.mp3`);
+        made++;
+        // browsers drop downloads that fire in the same instant
+        if (i < chosen.length - 1) await new Promise((r) => setTimeout(r, 400));
       }
-      const out = await ctx.startRendering();
-      const bytes = await new Promise((resolve, reject) => {
-        const w = new Worker(new URL("./export-worker.js", import.meta.url), { type: "module" });
-        w.onmessage = ({ data }) => { w.terminate(); data.error ? reject(new Error(data.error)) : resolve(data.bytes); };
-        w.onerror = (e) => { w.terminate(); reject(new Error(e.message || "encoder gagal dimuat")); };
-        const left = out.getChannelData(0).slice(), right = out.getChannelData(1).slice();
-        w.postMessage({ left, right, sampleRate: SR }, [left.buffer, right.buffer]);
-      });
-      const a = el("a");
-      a.href = URL.createObjectURL(new Blob([bytes], { type: "audio/mpeg" }));
-      a.download = `${(song.title || "lagu").replace(/[^\w\-. ]+/g, "_").trim().slice(0, 80) || "lagu"} - ${suffix}.mp3`;
-      document.body.append(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 60000);
       done();
-      toast("File audio siap");
+      toast(made > 1 ? `${made} file audio siap` : "File audio siap");
     } catch (ex) {
       done();
       toast(`Gagal export: ${ex.message}`, { error: true });
@@ -669,6 +727,121 @@ const player = (() => {
       exporting = false;
     }
   }
+
+  // mix the stems offline; pitch goes through the same shifter as playback, click is added after it
+  async function renderMix(bufs, SR, { semis = 0, click: clk = null } = {}) {
+    const len = Math.max(...bufs.map((b) => b.buf.length));
+    const pad = semis ? PITCH_LATENCY : 0; // shifter delay, cut off again below
+    const ctx = new OfflineAudioContext(2, len + pad, SR);
+    let dest = ctx.destination;
+    if (semis) {
+      const node = await pitchNode(ctx, semis);
+      if (!node) throw new Error("browser ini belum bisa mengubah nada");
+      node.connect(ctx.destination);
+      dest = node;
+    }
+    for (const { buf, vol } of bufs) {
+      const src = ctx.createBufferSource(), g = ctx.createGain();
+      src.buffer = buf; g.gain.value = vol;
+      src.connect(g).connect(dest);
+      src.start();
+    }
+    if (clk) clk.beats.forEach((b, i) => { if (b * SR < len) clickSound(ctx, b + pad / SR, clk.accents[i] > 0, clk.vol); });
+    const out = await ctx.startRendering();
+    return [out.getChannelData(0).slice(pad, pad + len), out.getChannelData(1).slice(pad, pad + len)];
+  }
+
+  // stereo float -> mp3 in a worker
+  function encode([left, right], SR) {
+    return new Promise((resolve, reject) => {
+      const w = new Worker(new URL("./export-worker.js", import.meta.url), { type: "module" });
+      w.onmessage = ({ data }) => { w.terminate(); data.error ? reject(new Error(data.error)) : resolve(data.bytes); };
+      w.onerror = (e) => { w.terminate(); reject(new Error(e.message || "encoder gagal dimuat")); };
+      w.postMessage({ left, right, sampleRate: SR }, [left.buffer, right.buffer]);
+    });
+  }
+
+  const safeName = (s) => (s || "lagu").replace(/[^\w\-. ]+/g, "_").trim().slice(0, 80) || "lagu";
+  function download(bytes, name) {
+    const a = el("a");
+    a.href = URL.createObjectURL(new Blob([bytes], { type: "audio/mpeg" }));
+    a.download = name;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+  }
+
+  // ---------------- click: metronome on the detected beats, accent on each bar's first beat
+  let click = { on: false, count: false, vol: 0.6, ...store.get("bass-click", {}) };
+  let clickNext = -1; // next beat index to schedule
+  let clickLast = 0; // playhead at the previous tick
+  let counting = 0; // count-in timer while it runs
+
+  function audioCtx() {
+    actx ||= new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === "suspended") actx.resume().catch(() => {});
+    return actx;
+  }
+
+  // schedule a little ahead of the playhead; re-sync after a seek or loop jump
+  function clickTick() {
+    const m = master();
+    if (!click.on || !song || !m || m.paused || !actx) return;
+    const t = now(), rate = m.playbackRate, beats = song.beats;
+    // the playhead jumped (seek, loop restart): start again from the beat at the new spot
+    if (clickNext < 0 || t < clickLast - 0.05 || t > clickLast + 0.5 * rate) clickNext = lowerBound(beats, t - 0.01, (b) => b);
+    clickLast = t;
+    const end = loop.on && loop.a != null && loop.b != null ? loop.b : Infinity;
+    while (clickNext < beats.length && beats[clickNext] < t + 0.12 * rate) {
+      const b = beats[clickNext];
+      if (b >= t - 0.02 && b < end - 0.02) clickSound(actx, actx.currentTime + Math.max(0, (b - t) / rate), barOf[clickNext] > 0, click.vol);
+      clickNext++;
+    }
+  }
+  setInterval(clickTick, 25);
+
+  // beats per bar from the downbeats (most common gap), else 4
+  function beatsPerBar() {
+    const gaps = {};
+    let prev = -1;
+    barOf.forEach((b, i) => { if (b > 0) { if (prev >= 0) gaps[i - prev] = (gaps[i - prev] || 0) + 1; prev = i; } });
+    const best = Object.entries(gaps).sort((a, b) => b[1] - a[1])[0];
+    const n = best ? Number(best[0]) : 4;
+    return n >= 2 && n <= 7 ? n : 4;
+  }
+
+  // one bar of clicks, timed so the song's next beat lands right after the last count
+  function countIn(t0) {
+    const c = audioCtx(), beats = song.beats, rate = speed;
+    const i = Math.min(beats.length - 1, lowerBound(beats, t0, (b) => b));
+    const lo = Math.max(0, i - 4), hi = Math.min(beats.length - 1, i + 4);
+    const ibi = ((hi > lo ? (beats[hi] - beats[lo]) / (hi - lo) : 60 / (song.bpm || 100))) / rate;
+    const n = beatsPerBar();
+    const lead = Math.max(0, (beats[i] - t0) / rate); // audio before the first beat
+    const startAt = c.currentTime + 0.08 + Math.max(0, n * ibi - lead);
+    for (let k = 0; k < n; k++) clickSound(c, startAt + lead - (n - k) * ibi, k === 0, click.vol);
+    return new Promise((resolve) => { counting = setTimeout(() => { counting = 0; resolve(true); }, (startAt - c.currentTime) * 1000); });
+  }
+  function cancelCount() { if (counting) { clearTimeout(counting); counting = 0; setPlayIcon(false); return true; } return false; }
+
+  function paintClick() {
+    const tg = $("#clickToggle");
+    tg.textContent = click.on ? "On" : "Off";
+    tg.classList.toggle("active", click.on);
+    tg.setAttribute("aria-pressed", String(click.on));
+    $("#clickCount").classList.toggle("active", click.count);
+    $("#clickCount").setAttribute("aria-pressed", String(click.count));
+    $("#clickVol").value = click.vol;
+  }
+  function setClick(next) {
+    click = { ...click, ...next };
+    store.set("bass-click", click);
+    clickNext = -1;
+    if (click.on) audioCtx();
+    paintClick();
+  }
+  paintClick();
 
   function toggleMuteAt(i) {
     const t = tracks[i];
@@ -796,20 +969,28 @@ const player = (() => {
   }
 
   function stop() {
+    cancelCount();
     cancelAnimationFrame(raf);
     tracks.forEach((t) => t.el.pause());
     setPlayIcon(false);
   }
-  const pause = () => { tracks.forEach((t) => t.el.pause()); setPlayIcon(false); };
+  const pause = () => { cancelCount(); tracks.forEach((t) => t.el.pause()); setPlayIcon(false); };
   media.register("bass", pause);
 
   function setPlayIcon(playing) { setIcon($("#bPlay"), playing ? "pause" : "play"); }
 
   async function toggle() {
     if (!song || !tracks.length) return;
+    if (cancelCount()) return; // second press stops the count-in
     if (master().paused) {
       media.claim("bass");
       if (actx?.state === "suspended") actx.resume().catch(() => {});
+      if (click.on || click.count) audioCtx(); // click needs a running context, made inside this gesture
+      if (click.count) {
+        setPlayIcon(true);
+        await countIn(master().currentTime);
+      }
+      clickNext = -1;
       const t0 = master().currentTime;
       tracks.forEach((t) => { t.el.currentTime = t0; });
       try { await Promise.all(tracks.map((t) => t.el.play())); } catch {}
@@ -1895,6 +2076,9 @@ const player = (() => {
   $("#bPitchDown").addEventListener("click", () => setPitch(pitch - 1));
   $("#bPitchUp").addEventListener("click", () => setPitch(pitch + 1));
   $("#bPitchVal").addEventListener("click", () => setPitch(0));
+  $("#clickToggle").addEventListener("click", () => setClick({ on: !click.on }));
+  $("#clickCount").addEventListener("click", () => setClick({ count: !click.count }));
+  $("#clickVol").addEventListener("input", (e) => setClick({ vol: +e.target.value }));
   $("#loopA").addEventListener("click", setA);
   $("#loopB").addEventListener("click", setB);
   $("#loopToggle").addEventListener("click", toggleLoop);
@@ -1925,6 +2109,7 @@ const player = (() => {
     else if (k === "[" || k === "]") jumpPart(k === "]" ? 1 : -1);
     else if (k === "s") loopPart(partAt(now()));
     else if (k === "t") setSub(sub === "graph" ? "tab" : "graph");
+    else if (k === "k") setClick({ on: !click.on });
     else if (k === "m") setPart(part === "stack" ? "bass" : "stack");
     else if (k === "v") {
       const avail = PART_CYCLE.filter(hasPart);
@@ -1933,7 +2118,7 @@ const player = (() => {
     else if (/^[1-7]$/.test(k)) toggleMuteAt(+k - 1);
   });
 
-  return { load, stop, redrawBase: drawOverviewBase, exportOptions, exportMix };
+  return { load, stop, redrawBase: drawOverviewBase, openExport };
 })();
 
 // ------------------------------------------------------------------ routes
@@ -2007,11 +2192,8 @@ export async function enterSong(id) {
     more.type = "button"; more.title = "Lainnya"; more.append(icon("more"));
     more.onclick = (e) => { e.stopPropagation(); showMenu(more, songMenu(job).filter((x) => x && !/MIDI|Playlist|Buka di/.test(x.label))); };
     const exp = el("button", "btn sm");
-    exp.type = "button"; exp.title = "Gabungkan instrumen jadi satu file MP3"; exp.append(icon("download"), "Export audio");
-    exp.onclick = (e) => {
-      e.stopPropagation();
-      showMenu(exp, player.exportOptions().map((o) => ({ label: o.label, icon: "download", onClick: () => player.exportMix(o.list, o.suffix) })));
-    };
+    exp.type = "button"; exp.title = "Pilih satu atau beberapa versi (minus one, instrumen saja), tiap versi jadi MP3"; exp.append(icon("download"), "Export audio");
+    exp.onclick = (e) => { e.stopPropagation(); player.openExport(); };
     acts.push(exp, midi);
     if (data.result_mode === "classic" && server.analysis) {
       const up = el("button", "btn sm ai-up");

@@ -1062,6 +1062,20 @@ div.sheet:not([hidden]) { flex: 1; min-height: 300px; display: flex; flex-direct
   .app-update-text { flex-basis: calc(100% - 80px); }
 }
 
+/* ------------------------------------------------------------------ click + export dialog */
+.dock .click-vol { width: 64px; }
+.export-opts { display: flex; flex-direction: column; gap: 12px; max-height: 50vh; overflow-y: auto; }
+.export-group h3 { font-size: .74rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 6px; }
+.export-group .rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.export-group:first-child:has(.check-row:only-child) .rows { grid-template-columns: 1fr; }
+.check-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); cursor: pointer; font-size: .88rem; user-select: none; }
+.check-row input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; flex: none; }
+.check-row:has(input:checked) { background: var(--accent-soft); }
+.check-row.plain, .check-row.plain:has(input:checked) { background: none; padding: 4px 2px; }
+.check-row[hidden] { display: none; }
+.export-extra { display: flex; flex-direction: column; gap: 2px; border-top: 1px solid var(--line); padding-top: 10px; }
+#exportGo:disabled { opacity: .5; cursor: not-allowed; }
+
 /* ------------------------------------------------------------------ metronome */
 .nav-item[data-nav="metro"].active { background: var(--metro-soft); color: var(--metro); }
 .metro-wrap { max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
