@@ -3,6 +3,7 @@
 // clicks are scheduled ~120 ms ahead on the audio clock; the screen follows with requestAnimationFrame.
 
 import { $, $$, el, icon, store, media, onKeys, router, toast, showMenu } from "./core.js";
+import { startScan, codeFrom } from "./qrscan.js";
 import { sync, clock, initSync, lead, follow, leave, broadcast, request, joinUrl, qrSvg, cleanCode, setLatency } from "./metrosync.js";
 
 const MIN_BPM = 30, MAX_BPM = 300;
@@ -583,7 +584,8 @@ function renderSync() {
 
   const d = $("#metroSync");
   d.dataset.role = role || "none";
-  $("#syncPick").hidden = !!role;
+  $("#syncPick").hidden = !!role || scanning;
+  $("#syncScan").hidden = !scanning;
   $("#syncHost").hidden = role !== "host";
   $("#syncFollow").hidden = role !== "follower";
   $("#syncShared").hidden = !role;
@@ -604,6 +606,46 @@ function renderSync() {
   }
   $("#syncLatency").value = sync.latency;
   $("#syncLatencyVal").textContent = `${sync.latency > 0 ? "+" : ""}${sync.latency} ms`;
+}
+
+// ------------------------------------------------------------------ qr scan (follow by camera)
+
+let scanning = false, stopScan = null, scanId = 0; // scanId: a camera that starts late for an old scan gets stopped
+
+async function openScan() {
+  if (scanning) return;
+  const id = ++scanId;
+  scanning = true;
+  $("#syncScanMsg").textContent = "Membuka kamera…";
+  renderSync();
+  // the audio unlock rides on this tap too (phones need a touch before sound)
+  ensureAudio(); ctx.resume().catch(() => {});
+  try {
+    const stop = await startScan($("#syncScanVideo"), (text) => {
+      if (id !== scanId) return;
+      stopScan = null;
+      const code = cleanCode(codeFrom(text));
+      if (code.length < 4) { toast("QR ini bukan QR sync metronome", { error: true }); closeScan(); return; }
+      closeScan();
+      follow(code);
+    });
+    if (id !== scanId || !scanning) { stop(); return; } // closed while the camera was starting
+    stopScan = stop;
+    $("#syncScanMsg").textContent = "Arahkan kamera ke QR di perangkat patokan";
+  } catch (e) {
+    if (id !== scanId) return;
+    closeScan();
+    const denied = e?.name === "NotAllowedError" || e?.name === "SecurityError";
+    toast(denied ? "Izin kamera ditolak. Izinkan kamera untuk situs ini di pengaturan browser, atau ketik kodenya." : e?.name === "NotFoundError" ? "Kamera tidak ditemukan. Ketik kodenya saja." : (e?.message || "Kamera tidak bisa dibuka"), { error: true, ms: 7000 });
+  }
+}
+
+function closeScan() {
+  scanId++;
+  scanning = false;
+  stopScan?.();
+  stopScan = null;
+  renderSync();
 }
 
 let qrFor = "";
@@ -676,6 +718,11 @@ export function initMetronome() {
     ensureAudio(); ctx.resume();
     follow(c);
   };
+  $("#syncScanBtn").onclick = openScan;
+  $("#syncScanStop").onclick = closeScan;
+  // camera off whenever the dialog closes (watch the open attribute: some webviews skip the close event)
+  new MutationObserver(() => { if (!$("#metroSync").open && scanning) closeScan(); })
+    .observe($("#metroSync"), { attributes: true, attributeFilter: ["open"] });
   $("#syncCodeIn").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); $("#syncJoin").click(); } };
   $("#syncEnd").onclick = () => { leave(); held = false; renderSync(); };
   // same end action straight from the page header, no need to open the dialog

@@ -61,6 +61,7 @@
     <symbol id="i-ear" viewBox="0 0 24 24"><path d="M7 9a5 5 0 0 1 10 0c0 3-2.5 3.8-3.2 6-.5 1.6-1.4 3.5-3.8 3.5A2.8 2.8 0 0 1 7.2 16M10 9.5a2 2 0 0 1 4 0c0 1.2-1.2 1.6-1.6 2.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-tuner" viewBox="0 0 24 24"><path d="M9 3v7a3 3 0 0 0 6 0V3M12 13v8M9 21h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-metro" viewBox="0 0 24 24"><path d="M9.5 3h5l4.5 18H5zM12 16l5-10M7 16.5h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
     <symbol id="i-sync" viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.5M20 4v4.5h-4.5M20 12a8 8 0 0 1-13.7 5.6L4 15.5M4 20v-4.5h4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
     <symbol id="i-mac" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 20h8M12 16v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
@@ -646,12 +647,22 @@ https://youtu.be/…"></textarea>
       </button>
       <div class="sync-choice as-form">
         <b>Mengikuti</b>
-        <span>Scan QR di perangkat patokan pakai kamera HP, atau ketik kodenya di sini:</span>
+        <span>Scan QR yang tampil di perangkat patokan, atau ketik kodenya.</span>
+        <button class="btn primary sync-scan-btn" type="button" id="syncScanBtn"><svg><use href="#i-camera"/></svg>Scan QR</button>
         <div class="sync-join">
           <input id="syncCodeIn" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="8" placeholder="Ketik kode, mis. K7P2Q" aria-label="Kode sync">
-          <button class="btn primary" type="button" id="syncJoin">Ikuti</button>
+          <button class="btn" type="button" id="syncJoin">Ikuti</button>
         </div>
       </div>
+    </div>
+    <!-- camera view while scanning the leader's qr -->
+    <div id="syncScan" class="sync-scan" hidden>
+      <div class="sync-scan-view">
+        <video id="syncScanVideo" playsinline muted></video>
+        <span class="sync-scan-frame"></span>
+      </div>
+      <p class="ear-small center" id="syncScanMsg">Arahkan kamera ke QR di perangkat patokan</p>
+      <button class="btn" type="button" id="syncScanStop">Batal</button>
     </div>
     <div id="syncHost" class="sync-host" hidden>
       <div class="sync-qr" id="syncQr"></div>

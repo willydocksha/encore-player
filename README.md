@@ -87,7 +87,7 @@ File Google Drive harus dibagikan sebagai **"Siapa saja yang memiliki link"**.
 - Suara klik, kayu, atau beep, plus volume. Dijadwalkan lewat jam audio (Web Audio), jadi tetap presisi walau layar sibuk
 - Otomatis berhenti saat pindah halaman atau saat audio lain diputar
 - **Daftar lagu**: simpan setelan tiap lagu (tempo, birama, ketukan, aksen) dengan nama, klik untuk memakainya lagi. Pindah lagu dengan tombol ‹ › atau `[` `]` / Page Up / Page Down (pedal page turner bisa dipakai). Lagu yang diubah setelannya menampilkan **Simpan ubahan**; menu ⋯ untuk ganti nama, timpa, urutkan, dan hapus (bisa diurungkan). Daftarnya ikut tersambung antara versi online dan Encore App, dan saat sync, memilih lagu ikut ke semua perangkat
-- **Sync** (tombol `S`): samakan ketukan di beberapa perangkat. Satu perangkat jadi **Diikuti** dan menampilkan QR + kode, perangkat lain jadi **Mengikuti** dengan scan QR pakai kamera HP atau mengetik kodenya. Jam tiap perangkat diukur (ping) supaya klik jatuh di saat yang sama. Tempo, birama, ketukan, aksen, dan Mulai/Stop dari perangkat mana pun ikut ke semua; suara dan volume tetap per perangkat. Ada geser suara ±300 ms untuk speaker Bluetooth yang telat. Koneksi lewat WebRTC (PeerJS cloud hanya untuk perkenalan), butuh internet; paling lancar di Wi-Fi yang sama
+- **Sync** (tombol `S`): samakan ketukan di beberapa perangkat. Satu perangkat jadi **Diikuti** dan menampilkan QR + kode, perangkat lain jadi **Mengikuti** dengan **Scan QR** (kamera langsung terbuka di halaman ini; BarcodeDetector bawaan browser, atau jsQR untuk Safari), scan pakai aplikasi kamera HP, atau mengetik kodenya. Jam tiap perangkat diukur (ping) supaya klik jatuh di saat yang sama. Tempo, birama, ketukan, aksen, dan Mulai/Stop dari perangkat mana pun ikut ke semua; suara dan volume tetap per perangkat. Ada geser suara ±300 ms untuk speaker Bluetooth yang telat. Koneksi lewat WebRTC (PeerJS cloud hanya untuk perkenalan), butuh internet; paling lancar di Wi-Fi yang sama
 
 ## Encore App
 
@@ -141,7 +141,7 @@ Import repo ini di Vercel, pilih Framework Preset **Other**, lalu Deploy. Yang t
 
 | Path | Isi |
 |---|---|
-| `index.html`, `app/` | Tampilan: `core.js`, `playlist.js`, `bass.js` (Breakdown), `ear.js` (Perfect Pitch), `tuner.js` (Tuner), `metronome.js` (Metronome), `metrosync.js` (Sync metronome), `spectrum.js` (Cek frekuensi), `aimode.js` (mode cepat/AI), `getapp.js` (halaman download), `sync.js`, `tour.js` (tur Cara pakai), `main.js`, `styles.css` |
+| `index.html`, `app/` | Tampilan: `core.js`, `playlist.js`, `bass.js` (Breakdown), `ear.js` (Perfect Pitch), `tuner.js` (Tuner), `metronome.js` (Metronome), `metrosync.js` (Sync metronome), `qrscan.js` (scan QR pakai kamera), `spectrum.js` (Cek frekuensi), `aimode.js` (mode cepat/AI), `getapp.js` (halaman download), `sync.js`, `tour.js` (tur Cara pakai), `main.js`, `styles.css` |
 | `app/config.js` | Alamat rilis Encore App |
 | `api/` | Fungsi Vercel untuk Drive & judul |
 | `backend/app.py` | Server Encore App: antrian, library, file stem/MIDI, Drive & judul |
