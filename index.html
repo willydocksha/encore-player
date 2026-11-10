@@ -415,14 +415,6 @@
             <button type="button" id="bPitchUp" title="Naikkan setengah nada (=)" aria-label="Naikkan nada">+</button>
           </div>
         </div>
-        <div class="dock-group">
-          <span class="label">Click</span>
-          <div class="seg" id="bClick" role="group" aria-label="Click">
-            <button type="button" id="clickToggle" title="Click ikut beat lagu (K)" aria-pressed="false">Off</button>
-            <button type="button" id="clickCount" title="Hitungan 1 bar sebelum lagu mulai" aria-pressed="false">Hitung</button>
-          </div>
-          <input type="range" id="clickVol" class="click-vol" min="0.05" max="1" step="0.05" value="0.6" aria-label="Volume click" title="Volume click">
-        </div>
         <div class="dock-group extra">
           <span class="label">Loop</span>
           <div class="seg">
@@ -693,26 +685,6 @@ https://youtu.be/…"></textarea>
   </form>
 </dialog>
 
-<!-- export audio: pick one or more versions, each becomes one mp3 -->
-<dialog class="sheet small" id="exportDialog">
-  <form method="dialog" class="sheet-inner">
-    <header class="sheet-head">
-      <h2>Export audio</h2>
-      <button class="icon-btn" value="cancel" aria-label="Tutup"><svg><use href="#i-x"/></svg></button>
-    </header>
-    <p>Centang satu atau beberapa versi. Tiap versi jadi satu file MP3.</p>
-    <div class="export-opts" id="exportOpts"></div>
-    <div class="export-extra">
-      <label class="check-row plain"><input type="checkbox" id="exportClick"> Tambahkan click (ikut beat lagu)</label>
-      <label class="check-row plain" id="exportPitchRow"><input type="checkbox" id="exportPitch"> <span id="exportPitchLabel">Ikut nada</span></label>
-    </div>
-    <footer class="sheet-foot">
-      <button class="btn" value="cancel">Batal</button>
-      <button class="btn primary" value="ok" id="exportGo"><svg><use href="#i-download"/></svg><span id="exportGoLabel">Export</span></button>
-    </footer>
-  </form>
-</dialog>
-
 <!-- confirm -->
 <dialog class="sheet small" id="confirm">
   <form method="dialog" class="sheet-inner">
@@ -757,7 +729,6 @@ https://youtu.be/…"></textarea>
           <dt><kbd>A</kbd> <kbd>B</kbd></dt><dd>set titik loop</dd>
           <dt><kbd>L</kbd> <kbd>Esc</kbd></dt><dd>loop on/off / hapus</dd>
           <dt><kbd>−</kbd> <kbd>=</kbd></dt><dd>nada turun / naik setengah</dd>
-          <dt><kbd>K</kbd></dt><dd>click on/off</dd>
           <dt><kbd>M</kbd></dt><dd>multitrack</dd>
           <dt><kbd>V</kbd></dt><dd>bagian berikutnya (drum, bass, vokal, …)</dd>
           <dt><kbd>T</kbd></dt><dd>grafik ↔ tab (bass, gitar)</dd>
