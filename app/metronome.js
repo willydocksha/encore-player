@@ -62,6 +62,8 @@ let anchor = 0, n = 0, lastSched = -Infinity; // timeline, see top
 let mapD = null; // audio clock minus performance clock (s), smoothed
 let queue = []; // { time, beat, part } waiting to be shown
 let taps = [];
+let blink = store.get("metro-blink", false); // per device: flash the beat across the whole screen
+let wakeLock = null; // keeps the screen on while the beat runs
 
 function clampBpm(v) { return Math.max(MIN_BPM, Math.min(MAX_BPM, Math.round(v) || 100)); }
 
@@ -218,6 +220,7 @@ function frame() {
     if (i === cur.beat && cur.part === 0) { d.classList.remove("hit"); void d.offsetWidth; d.classList.add("hit"); }
   });
   $("#metroCount").textContent = cur.part === 0 ? String(cur.beat + 1) : SYLLABLES[sub][cur.part] || "";
+  if (cur.part === 0 && blink) blinkBeat(cur.beat);
   if (cur.part === 0) {
     const flash = $("#metroFlash");
     flash.classList.toggle("accent", (accents[cur.beat] ?? 1) === 2);
@@ -225,9 +228,26 @@ function frame() {
   }
 }
 
+// screen stays on while the beat runs (phones dim and lock otherwise, which also drops a sync link)
+async function keepAwake(on) {
+  if (!on) { const l = wakeLock; wakeLock = null; l?.release().catch(() => {}); return false; }
+  if (wakeLock || !navigator.wakeLock || document.hidden) return false;
+  try {
+    const l = await navigator.wakeLock.request("screen");
+    if (!running) { l.release().catch(() => {}); return false; } // stopped while asking
+    wakeLock = l;
+    l.addEventListener("release", () => { if (wakeLock === l) wakeLock = null; });
+    return true;
+  } catch { return false; }
+}
+
 // start or stop the local sound to match playing / held
 function runAudio() {
+  const was = running;
   running = audible();
+  // tell once per start that the screen will stay on
+  if (running && !was) keepAwake(true).then((ok) => ok && toast("Layar tidak akan mati selama metronome jalan", { ms: 3000 }));
+  else if (!running) keepAwake(false);
   if (running) {
     if (ctx.state !== "running") ctx.resume();
     reindex();
@@ -277,6 +297,9 @@ function applyChange(p) {
     }
   }
   if (Array.isArray(p.accents) && p.accents.length === sig.beats) accents = p.accents.map((v) => (v === 2 || v === 0 ? v : 1));
+  // song list and the song in use are shared too (a follower edits the leader's list)
+  if (Array.isArray(p.songs)) store.set("metro-songs", cleanSongs(p.songs));
+  if ("song" in p) { curSong = typeof p.song === "string" ? p.song : null; store.set("metro-song", curSong); }
   if ("playing" in p && p.playing !== playing) {
     playing = !!p.playing;
     if (playing) {
@@ -301,6 +324,8 @@ function applyShared(s) {
   sub = [1, 2, 3, 4].includes(s.sub) ? s.sub : 1;
   accents = Array.isArray(s.accents) && s.accents.length === sig.beats ? s.accents : loadAccents();
   anchor = +s.anchor || 0;
+  if (Array.isArray(s.songs)) sharedSongs = cleanSongs(s.songs);
+  sharedCur = typeof s.song === "string" ? s.song : null;
   const startNow = !!s.playing && !playing;
   playing = !!s.playing;
   persist();
@@ -315,7 +340,7 @@ function applyShared(s) {
 }
 
 function sharedState() {
-  return { bpm, sig: sig.id, sub, accents, playing, anchor };
+  return { bpm, sig: sig.id, sub, accents, playing, anchor, songs: localSongs(), song: curSong };
 }
 
 function persist() {
@@ -412,12 +437,21 @@ function render() {
 
   $("#metroVol").value = vol;
 
+  $("#metroBlink").replaceChildren(...[[false, "Mati"], [true, "Layar"]].map(([v, label]) => {
+    const b = el("button", v === blink ? "active" : "", label);
+    b.type = "button";
+    b.title = v ? "Layar berkedip di tiap ketukan, dibagi per ketukan" : "Tanpa kedip layar";
+    b.onclick = () => { blink = v; store.set("metro-blink", blink); render(); };
+    return b;
+  }));
+
   const on = audible();
   const btn = $("#metroToggle");
   btn.querySelector("use").setAttribute("href", on ? "#i-stop" : "#i-play");
   btn.lastChild.textContent = on ? "Stop" : playing && held ? "Ikut lagi" : "Mulai";
   btn.classList.toggle("on", on);
   $("#metroCard").classList.toggle("playing", on);
+  renderStage();
   if (!on) {
     $("#metroCount").textContent = "";
     $$("#metroBeats .metro-dot").forEach((d) => d.classList.remove("now", "hit"));
@@ -428,12 +462,50 @@ function render() {
 
 // ------------------------------------------------------------------ saved songs
 // each song keeps the shared settings (tempo, signature, subdivision, accents); sound and volume stay per device.
-// loading one goes through act(), so synced devices follow it too.
+// loading one goes through act(), so synced devices follow it too. while synced everyone sees the leader's list.
 
-const getSongs = () => (Array.isArray(store.get("metro-songs", [])) ? store.get("metro-songs", []) : []);
-const setSongs = (list) => store.set("metro-songs", list);
-let curSong = store.get("metro-song", null); // id of the song loaded last
+let curSong = store.get("metro-song", null); // id of the song loaded last (this device's list)
+let sharedSongs = null, sharedCur = null; // follower: the leader's list and its current song
 let renaming = null; // id of the song whose name is being edited
+
+const following = () => sync.role === "follower";
+const localSongs = () => { const l = store.get("metro-songs", []); return Array.isArray(l) ? l : []; };
+const getSongs = () => (following() ? sharedSongs || [] : localSongs());
+const getCur = () => (following() ? sharedCur : curSong);
+
+// a follower's edits go to the leader (shown right away, the echo confirms); the leader shares its own.
+// cur (optional) also makes that song the one in use, in the same message so both land together
+function setSongs(list, cur) {
+  const p = cur === undefined ? { songs: list } : { songs: list, song: cur };
+  if (following()) {
+    sharedSongs = list;
+    if (cur !== undefined) sharedCur = cur;
+    request(p);
+    return;
+  }
+  applyChange(p);
+  broadcast();
+}
+
+// songs arriving over sync or from storage: keep only known fields and sane values
+function cleanSongs(list) {
+  return list.filter((x) => x && typeof x === "object").slice(0, 300).map((x) => ({
+    id: String(x.id || Math.random().toString(36).slice(2)).slice(0, 24),
+    name: String(x.name || "Lagu").slice(0, 60),
+    bpm: clampBpm(x.bpm),
+    sig: SIGS.some((g) => g.id === x.sig) ? x.sig : "4/4",
+    sub: [1, 2, 3, 4].includes(x.sub) ? x.sub : 1,
+    accents: Array.isArray(x.accents) ? x.accents.slice(0, 7).map((v) => (v === 2 || v === 0 ? v : 1)) : [],
+  }));
+}
+
+// follower: keep a copy of the leader's songs in this device's own list (skips ones already there)
+function copySongs() {
+  const mine = localSongs(), have = new Set(mine.map((x) => x.id));
+  const add = (sharedSongs || []).filter((x) => !have.has(x.id));
+  store.set("metro-songs", mine.concat(add));
+  toast(add.length ? `${add.length} lagu disalin ke daftarmu` : "Semua lagu sudah ada di daftarmu", { ms: 2500 });
+}
 
 const nowSettings = () => ({ bpm, sig: sig.id, sub, accents: accents.slice() });
 const sameAsNow = (s) => s.bpm === bpm && s.sig === sig.id && s.sub === sub && String(s.accents) === String(accents);
@@ -441,9 +513,8 @@ const subLabel = (n) => SUBS.find((x) => x.n === n)?.label || "♩";
 
 function loadSong(s) {
   if (!s) return;
-  curSong = s.id;
-  store.set("metro-song", curSong);
-  act({ bpm: s.bpm, sig: s.sig, sub: s.sub, accents: s.accents });
+  if (following()) sharedCur = s.id; // shown right away, the leader echoes it
+  act({ bpm: s.bpm, sig: s.sig, sub: s.sub, accents: s.accents, song: s.id });
   renderSongs();
 }
 
@@ -451,7 +522,7 @@ function loadSong(s) {
 function stepSong(d) {
   const list = getSongs();
   if (!list.length) { toast("Belum ada lagu tersimpan"); return; }
-  const i = list.findIndex((x) => x.id === curSong);
+  const i = list.findIndex((x) => x.id === getCur());
   const j = i < 0 ? (d > 0 ? 0 : list.length - 1) : i + d;
   if (j < 0 || j >= list.length) return;
   loadSong(list[j]);
@@ -463,9 +534,7 @@ function addSong(name) {
   name = name.trim() || `Lagu ${list.length + 1}`;
   const s = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name, ...nowSettings() };
   list.push(s);
-  setSongs(list);
-  curSong = s.id;
-  store.set("metro-song", curSong);
+  setSongs(list, s.id);
   renderSongs();
   toast(`"${name}" disimpan`, { ms: 2000 });
 }
@@ -498,7 +567,7 @@ function removeSong(id) {
 
 function songRow(s, i) {
   const li = el("li", "metro-song");
-  const on = s.id === curSong, changed = on && !sameAsNow(s);
+  const on = s.id === getCur(), changed = on && !sameAsNow(s);
   li.classList.toggle("on", on);
 
   // name being edited: a text field in place of the row
@@ -564,13 +633,41 @@ function songRow(s, i) {
 }
 
 function renderSongs() {
-  const list = getSongs();
-  if (curSong && !list.some((x) => x.id === curSong)) curSong = null;
+  const list = getSongs(), fol = following();
+  if (!fol && curSong && !list.some((x) => x.id === curSong)) curSong = null;
   $("#metroSongs").replaceChildren(...list.map(songRow));
   $("#metroSongsEmpty").hidden = list.length > 0;
-  const i = list.findIndex((x) => x.id === curSong);
+  $("#metroSongsEmpty").textContent = fol ? "Perangkat patokan belum punya daftar lagu. Lagu yang kamu simpan di sini masuk ke daftarnya." : "Belum ada. Atur tempo, birama, ketukan, dan aksen untuk satu lagu, lalu simpan di bawah. Nanti tinggal klik untuk memakainya lagi.";
+  // synced: say whose list this is
+  $("#metroSongsNote").hidden = !sync.role;
+  $("#metroSongsNoteText").textContent = fol ? "Daftar dari perangkat patokan. Ubahan di sini ikut ke semua." : `Daftar ini dipakai semua perangkat yang mengikuti.`;
+  $("#metroSongsCopy").hidden = !fol || !list.length;
+  const i = list.findIndex((x) => x.id === getCur());
   $("#metroSongPrev").disabled = !list.length || i === 0;
   $("#metroSongNext").disabled = !list.length || i === list.length - 1;
+}
+
+// ------------------------------------------------------------------ screen flash
+
+// one column per beat across the whole screen; the column of the sounding beat lights up
+function renderStage() {
+  const st = $("#metroStage");
+  st.hidden = !(blink && running);
+  if (st.childElementCount !== sig.beats) {
+    st.replaceChildren(...accents.map((_, i) => el("span", null, String(i + 1))));
+  }
+  st.style.setProperty("--n", sig.beats);
+  // fade within the beat, so fast tempos still blink apart
+  st.style.setProperty("--blink-ms", `${Math.round(Math.min(380, (60000 / bpm) * 0.85))}ms`);
+}
+
+function blinkBeat(beat) {
+  const lvl = accents[beat] ?? 1;
+  if (lvl === 0) return; // silent beat stays dark
+  const c = $("#metroStage").children[beat];
+  if (!c) return;
+  c.classList.toggle("acc", lvl === 2);
+  c.classList.remove("hit"); void c.offsetWidth; c.classList.add("hit");
 }
 
 // ------------------------------------------------------------------ sync ui
@@ -659,6 +756,8 @@ async function showQr() {
 
 function onStatus() {
   if (sync.role === "host" && sync.code) showQr();
+  if (!following()) { sharedSongs = null; sharedCur = null; }
+  renderSongs();
   // clock measured / sync ended: start or stop the local sound to match
   if (audible() !== running) runAudio();
   else renderSync();
@@ -707,7 +806,14 @@ export function initMetronome() {
   $("#metroSongPrev").onclick = () => stepSong(-1);
   $("#metroSongNext").onclick = () => stepSong(1);
   // the list may change on the other page (online site <-> encore app)
-  window.addEventListener("storage", (e) => { if (e.key === "metro-songs" && router.current === "metro") renderSongs(); });
+  window.addEventListener("storage", (e) => {
+    if (e.key !== "metro-songs") return;
+    broadcast(); // leader: followers get the new list too
+    if (router.current === "metro") renderSongs();
+  });
+  $("#metroSongsCopy").onclick = copySongs;
+  // the screen lock is dropped when the tab hides; take it again on return
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && running) keepAwake(true); });
 
   // sync dialog
   $("#metroSyncBtn").onclick = () => { renderSync(); if (sync.role === "host") showQr(); $("#metroSync").showModal(); };

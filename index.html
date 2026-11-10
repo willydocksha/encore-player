@@ -585,6 +585,7 @@
             <div class="metro-row"><span>Birama</span><div class="tuner-inst" id="metroSig"></div></div>
             <div class="metro-row"><span>Ketukan</span><div class="seg" id="metroSub"></div></div>
             <div class="metro-row"><span>Suara</span><div class="seg" id="metroSound"></div></div>
+            <div class="metro-row"><span>Kedip</span><div class="seg" id="metroBlink"></div></div>
             <div class="metro-row"><span>Volume</span><input type="range" id="metroVol" min="0" max="1" step="0.05" aria-label="Volume metronome"></div>
           </section>
         </div>
@@ -597,6 +598,11 @@
               <button class="icon-btn" type="button" id="metroSongNext" title="Lagu berikutnya (] atau Page Down)"><svg><use href="#i-next"/></svg></button>
             </div>
           </header>
+          <div class="metro-songs-note" id="metroSongsNote" hidden>
+            <svg><use href="#i-sync"/></svg>
+            <span id="metroSongsNoteText"></span>
+            <button class="btn sm" type="button" id="metroSongsCopy" title="Simpan lagu-lagu ini juga di daftar perangkat ini">Salin ke daftarku</button>
+          </div>
           <ol class="metro-song-list" id="metroSongs"></ol>
           <p class="ear-small" id="metroSongsEmpty">Belum ada. Atur tempo, birama, ketukan, dan aksen untuk satu lagu, lalu simpan di bawah. Nanti tinggal klik untuk memakainya lagi.</p>
           <form class="metro-song-add" id="metroSongAdd">
@@ -605,6 +611,8 @@
           </form>
         </aside>
       </div>
+      <!-- optional screen flash: one column per beat -->
+      <div class="metro-stage" id="metroStage" hidden aria-hidden="true"></div>
     </section>
   </main>
 </div>

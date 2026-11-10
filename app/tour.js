@@ -243,7 +243,7 @@ const tours = {
     {
       target: ".metro-opts",
       title: "Birama, ketukan, suara",
-      text: "Pilih birama (4/4, 3/4, 6/8, ...), pecahan ketukan (♫ seperdelapan, triol, ♬ seperenambelas), jenis suara, dan volume. Semua pilihan diingat.",
+      text: "Pilih birama (4/4, 3/4, 6/8, ...), pecahan ketukan (♫ seperdelapan, triol, ♬ seperenambelas), jenis suara, dan volume. Kedip: Layar membuat seluruh layar dibagi per ketukan dan bagian ketukan yang berbunyi menyala, enak untuk panggung yang berisik. Semua pilihan diingat.",
     },
     {
       target: "#metroSongsCard",
@@ -253,12 +253,12 @@ const tours = {
     {
       target: "#metroSyncBtn",
       title: "Sync dengan perangkat lain",
-      text: "Main bareng? Klik Sync. Satu perangkat pilih Diikuti dan menampilkan QR, perangkat lain scan QR-nya pakai kamera HP (atau ketik kodenya). Ketukannya jadi barengan, dan perubahan tempo, birama, atau Mulai/Stop dari perangkat mana pun ikut ke semua.",
+      text: "Main bareng? Klik Sync. Satu perangkat pilih Diikuti dan menampilkan QR, perangkat lain scan QR-nya pakai kamera HP (atau ketik kodenya). Ketukannya jadi barengan, dan perubahan tempo, birama, atau Mulai/Stop dari perangkat mana pun ikut ke semua. Daftar lagu patokan juga muncul di semua perangkat, jadi pindah lagu ikut barengan.",
     },
     {
       target: "#metroToggle",
       title: "Mulai",
-      text: "Klik Mulai atau tekan Spasi. Metronome otomatis berhenti saat pindah halaman atau saat lagu di Playlist diputar.",
+      text: "Klik Mulai atau tekan Spasi. Selama jalan, layar tidak akan mati sendiri. Metronome otomatis berhenti saat pindah halaman atau saat lagu di Playlist diputar.",
     },
   ],
 };

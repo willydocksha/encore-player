@@ -1119,7 +1119,23 @@ div.sheet:not([hidden]) { flex: 1; min-height: 300px; display: flex; flex-direct
 .metro-tap { min-height: 50px; }
 .metro-tap.hit { animation: metro-pop .15s ease-out; border-color: var(--metro); }
 /* options */
+/* screen flash: columns over the whole page, one per beat (above the tab bar, under toasts) */
+.metro-stage { position: fixed; inset: 0; z-index: 35; pointer-events: none; display: flex; }
+.metro-stage[hidden] { display: none; }
+.metro-stage > span {
+  flex: 1; display: grid; place-items: center; opacity: 0; background: var(--metro); color: #fff;
+  font: 800 clamp(2rem, calc(60vw / var(--n, 4)), 9rem) var(--f-display); box-shadow: inset -1px 0 0 rgba(0, 0, 0, .25);
+}
+.metro-stage > span.hit { animation: stage-blink var(--blink-ms, 300ms) ease-out; }
+.metro-stage > span.acc.hit { animation-name: stage-blink-acc; }
+@keyframes stage-blink { from { opacity: .32; } to { opacity: 0; } }
+@keyframes stage-blink-acc { from { opacity: .62; } to { opacity: 0; } }
 /* saved songs */
+.metro-songs-note { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--metro) 10%, transparent); font-size: .8rem; color: var(--ink-2); }
+.metro-songs-note[hidden] { display: none; }
+.metro-songs-note svg { width: 15px; height: 15px; color: var(--metro); flex: none; }
+.metro-songs-note span { flex: 1; min-width: 140px; }
+.metro-songs-note .btn { font-size: .75rem; padding: 4px 10px; }
 .metro-songs { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px; position: sticky; top: 16px; }
 @container (max-width: 680px) { .metro-songs { position: static; } }
 .metro-songs-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
