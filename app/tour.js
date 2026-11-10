@@ -246,6 +246,11 @@ const tours = {
       text: "Pilih birama (4/4, 3/4, 6/8, ...), pecahan ketukan (♫ seperdelapan, triol, ♬ seperenambelas), jenis suara, dan volume. Semua pilihan diingat.",
     },
     {
+      target: "#metroSongsCard",
+      title: "Daftar lagu",
+      text: "Simpan setelan tiap lagu (tempo, birama, ketukan, aksen) dengan nama, mis. Lagu A, Lagu B. Klik satu lagu untuk langsung memakainya, atau pindah lagu dengan tombol ‹ › atau [ ] (pedal page turner juga bisa). Kalau setelannya kamu ubah, ada tombol Simpan ubahan.",
+    },
+    {
       target: "#metroSyncBtn",
       title: "Sync dengan perangkat lain",
       text: "Main bareng? Klik Sync. Satu perangkat pilih Diikuti dan menampilkan QR, perangkat lain scan QR-nya pakai kamera HP (atau ketik kodenya). Ketukannya jadi barengan, dan perubahan tempo, birama, atau Mulai/Stop dari perangkat mana pun ikut ke semua.",

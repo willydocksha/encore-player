@@ -2,7 +2,7 @@
 // timing is a timeline: step n sounds at anchor + n * step length, in the leader's clock (ms).
 // clicks are scheduled ~120 ms ahead on the audio clock; the screen follows with requestAnimationFrame.
 
-import { $, $$, el, store, media, onKeys, router, toast } from "./core.js";
+import { $, $$, el, icon, store, media, onKeys, router, toast, showMenu } from "./core.js";
 import { sync, clock, initSync, lead, follow, leave, broadcast, request, joinUrl, qrSvg, cleanCode, setLatency } from "./metrosync.js";
 
 const MIN_BPM = 30, MAX_BPM = 300;
@@ -421,7 +421,156 @@ function render() {
     $("#metroCount").textContent = "";
     $$("#metroBeats .metro-dot").forEach((d) => d.classList.remove("now", "hit"));
   }
+  renderSongs();
   renderSync();
+}
+
+// ------------------------------------------------------------------ saved songs
+// each song keeps the shared settings (tempo, signature, subdivision, accents); sound and volume stay per device.
+// loading one goes through act(), so synced devices follow it too.
+
+const getSongs = () => (Array.isArray(store.get("metro-songs", [])) ? store.get("metro-songs", []) : []);
+const setSongs = (list) => store.set("metro-songs", list);
+let curSong = store.get("metro-song", null); // id of the song loaded last
+let renaming = null; // id of the song whose name is being edited
+
+const nowSettings = () => ({ bpm, sig: sig.id, sub, accents: accents.slice() });
+const sameAsNow = (s) => s.bpm === bpm && s.sig === sig.id && s.sub === sub && String(s.accents) === String(accents);
+const subLabel = (n) => SUBS.find((x) => x.n === n)?.label || "♩";
+
+function loadSong(s) {
+  if (!s) return;
+  curSong = s.id;
+  store.set("metro-song", curSong);
+  act({ bpm: s.bpm, sig: s.sig, sub: s.sub, accents: s.accents });
+  renderSongs();
+}
+
+// previous / next song in the list (a page turner pedal sends page up / down)
+function stepSong(d) {
+  const list = getSongs();
+  if (!list.length) { toast("Belum ada lagu tersimpan"); return; }
+  const i = list.findIndex((x) => x.id === curSong);
+  const j = i < 0 ? (d > 0 ? 0 : list.length - 1) : i + d;
+  if (j < 0 || j >= list.length) return;
+  loadSong(list[j]);
+  toast(`${j + 1}. ${list[j].name}`, { ms: 1500 });
+}
+
+function addSong(name) {
+  const list = getSongs();
+  name = name.trim() || `Lagu ${list.length + 1}`;
+  const s = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name, ...nowSettings() };
+  list.push(s);
+  setSongs(list);
+  curSong = s.id;
+  store.set("metro-song", curSong);
+  renderSongs();
+  toast(`"${name}" disimpan`, { ms: 2000 });
+}
+
+function updateSong(id, patch) {
+  setSongs(getSongs().map((x) => (x.id === id ? { ...x, ...patch } : x)));
+  renderSongs();
+}
+
+function moveSong(id, d) {
+  const list = getSongs(), i = list.findIndex((x) => x.id === id), j = i + d;
+  if (i < 0 || j < 0 || j >= list.length) return;
+  [list[i], list[j]] = [list[j], list[i]];
+  setSongs(list);
+  renderSongs();
+}
+
+// delete with an undo toast instead of a confirm dialog
+function removeSong(id) {
+  const list = getSongs(), i = list.findIndex((x) => x.id === id);
+  if (i < 0) return;
+  const [gone] = list.splice(i, 1);
+  setSongs(list);
+  renderSongs();
+  toast(`"${gone.name}" dihapus`, {
+    action: "Urungkan",
+    onAction: () => { const l = getSongs(); l.splice(i, 0, gone); setSongs(l); renderSongs(); },
+  });
+}
+
+function songRow(s, i) {
+  const li = el("li", "metro-song");
+  const on = s.id === curSong, changed = on && !sameAsNow(s);
+  li.classList.toggle("on", on);
+
+  // name being edited: a text field in place of the row
+  if (renaming === s.id) {
+    const inp = el("input", "metro-song-rename");
+    inp.value = s.name;
+    inp.maxLength = 60;
+    inp.setAttribute("aria-label", "Nama lagu");
+    let done = false;
+    const finish = (save) => {
+      if (done) return;
+      done = true;
+      renaming = null;
+      if (save && inp.value.trim()) updateSong(s.id, { name: inp.value.trim() });
+      else renderSongs();
+    };
+    inp.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); finish(true); } else if (e.key === "Escape") { e.preventDefault(); finish(false); } };
+    inp.onblur = () => finish(true);
+    li.append(el("span", "metro-song-n", String(i + 1)), inp);
+    setTimeout(() => { inp.focus(); inp.select(); }, 0);
+    return li;
+  }
+
+  // the row itself loads the song
+  const main = el("button", "metro-song-main");
+  main.type = "button";
+  main.title = `Pakai setelan "${s.name}"`;
+  const sigLabel = SIGS.find((x) => x.id === s.sig)?.label || s.sig;
+  // name and settings sit side by side, stacked on narrow screens
+  const text = el("span", "metro-song-text");
+  text.append(el("span", "metro-song-name", s.name), el("span", "metro-song-meta", `${s.bpm} BPM · ${sigLabel} · ${subLabel(s.sub)}`));
+  main.append(el("span", "metro-song-n", String(i + 1)), text);
+  main.onclick = () => loadSong(s);
+  li.append(main);
+
+  // loaded, then tweaked: offer to save the tweak into it
+  if (changed) {
+    const up = el("button", "btn sm metro-song-save", "Simpan");
+    up.append(el("span", "wide-only", " ubahan")); // short label on phones
+    up.type = "button";
+    up.title = `Simpan setelan sekarang ke "${s.name}"`;
+    up.onclick = () => { updateSong(s.id, nowSettings()); toast(`"${s.name}" diperbarui`, { ms: 2000 }); };
+    li.append(up);
+  }
+
+  // more: rename, overwrite, move, delete
+  const more = el("button", "icon-btn");
+  more.type = "button";
+  more.title = "Lainnya";
+  more.append(icon("more"));
+  more.onclick = (e) => {
+    e.stopPropagation();
+    const n = getSongs().length;
+    showMenu(more, [
+      { label: "Ganti nama", onClick: () => { renaming = s.id; renderSongs(); } },
+      { label: "Timpa dengan setelan sekarang", icon: "check", onClick: () => { updateSong(s.id, nowSettings()); toast(`"${s.name}" diperbarui`, { ms: 2000 }); } },
+      i > 0 && { label: "Naikkan", icon: "up", onClick: () => moveSong(s.id, -1) },
+      i < n - 1 && { label: "Turunkan", icon: "down", onClick: () => moveSong(s.id, 1) },
+      { label: "Hapus", icon: "trash", danger: true, onClick: () => removeSong(s.id) },
+    ]);
+  };
+  li.append(more);
+  return li;
+}
+
+function renderSongs() {
+  const list = getSongs();
+  if (curSong && !list.some((x) => x.id === curSong)) curSong = null;
+  $("#metroSongs").replaceChildren(...list.map(songRow));
+  $("#metroSongsEmpty").hidden = list.length > 0;
+  const i = list.findIndex((x) => x.id === curSong);
+  $("#metroSongPrev").disabled = !list.length || i === 0;
+  $("#metroSongNext").disabled = !list.length || i === list.length - 1;
 }
 
 // ------------------------------------------------------------------ sync ui
@@ -507,6 +656,18 @@ export function initMetronome() {
     if (master) master.gain.value = vol;
   };
 
+  // saved songs
+  $("#metroSongAdd").onsubmit = (e) => {
+    e.preventDefault();
+    addSong($("#metroSongName").value);
+    $("#metroSongName").value = "";
+    $("#metroSongName").blur();
+  };
+  $("#metroSongPrev").onclick = () => stepSong(-1);
+  $("#metroSongNext").onclick = () => stepSong(1);
+  // the list may change on the other page (online site <-> encore app)
+  window.addEventListener("storage", (e) => { if (e.key === "metro-songs" && router.current === "metro") renderSongs(); });
+
   // sync dialog
   $("#metroSyncBtn").onclick = () => { renderSync(); if (sync.role === "host") showQr(); $("#metroSync").showModal(); };
   $("#syncLead").onclick = () => { lead(); renderSync(); };
@@ -537,6 +698,8 @@ export function initMetronome() {
     if (e.key === "ArrowDown" || e.key === "ArrowLeft") { e.preventDefault(); act({ bpmBy: e.shiftKey ? -5 : -1 }); return; }
     if (e.key === "t" || e.key === "T") { tap(); return; }
     if (e.key === "s" || e.key === "S") { $("#metroSyncBtn").click(); return; }
+    if (e.key === "[" || e.key === "PageUp") { e.preventDefault(); stepSong(-1); return; }
+    if (e.key === "]" || e.key === "PageDown") { e.preventDefault(); stepSong(1); return; }
     const k = +e.key;
     if (k >= 1 && k <= 4) act({ sub: k });
   });

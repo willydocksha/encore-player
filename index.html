@@ -578,6 +578,22 @@
           </div>
           <p class="ear-small center">Klik titik ketukan untuk ganti: <b>aksen</b>, biasa, atau diam.</p>
         </section>
+        <!-- saved songs: one tap brings back a song's tempo and signature -->
+        <section class="card metro-songs" id="metroSongsCard">
+          <header class="metro-songs-head">
+            <h3>Daftar lagu</h3>
+            <div class="metro-songs-nav">
+              <button class="icon-btn" type="button" id="metroSongPrev" title="Lagu sebelumnya ([ atau Page Up)"><svg><use href="#i-prev"/></svg></button>
+              <button class="icon-btn" type="button" id="metroSongNext" title="Lagu berikutnya (] atau Page Down)"><svg><use href="#i-next"/></svg></button>
+            </div>
+          </header>
+          <ol class="metro-song-list" id="metroSongs"></ol>
+          <p class="ear-small" id="metroSongsEmpty">Belum ada. Atur tempo, birama, ketukan, dan aksen untuk satu lagu, lalu simpan di bawah. Nanti tinggal klik untuk memakainya lagi.</p>
+          <form class="metro-song-add" id="metroSongAdd">
+            <input id="metroSongName" type="text" maxlength="60" autocomplete="off" placeholder="Nama lagu, mis. Lagu A" aria-label="Nama lagu">
+            <button class="btn primary" type="submit"><svg><use href="#i-plus"/></svg>Simpan setelan ini</button>
+          </form>
+        </section>
         <section class="card metro-opts">
           <div class="metro-row"><span>Birama</span><div class="tuner-inst" id="metroSig"></div></div>
           <div class="metro-row"><span>Ketukan</span><div class="seg" id="metroSub"></div></div>
@@ -849,6 +865,7 @@ https://youtu.be/…"></textarea>
           <dt><kbd>T</kbd></dt><dd>tap tempo</dd>
           <dt><kbd>S</kbd></dt><dd>sync dengan perangkat lain</dd>
           <dt><kbd>1</kbd>–<kbd>4</kbd></dt><dd>ketukan ♩ / ♫ / triol / ♬</dd>
+          <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>lagu sebelumnya / berikutnya (juga Page Up / Down)</dd>
         </dl>
       </div>
     </div>
