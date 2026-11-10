@@ -77,6 +77,14 @@ File Google Drive harus dibagikan sebagai **"Siapa saja yang memiliki link"**.
 - **Cek frekuensi** (tombol `T`): spektrum live 30 Hz–16 kHz. Tiap slap / pop / petikan direkam otomatis, lalu tiap band (Low-mid, Mid, Slap/attack 2–5 kHz, Presence, Click/air 8–16 kHz) dibandingkan ke Body (30–300 Hz). Tabel per nada memberi tanda merah kalau satu nada 3 dB lebih kencang dari rata-rata nada lain di band itu
 - Butuh izin mikrofon dan HTTPS (atau localhost). Mikrofon otomatis mati saat pindah halaman
 
+## Metronome
+
+- Tempo 30–300 BPM: slider, tombol ↑ ↓, atau **Tap tempo** (ketuk mengikuti lagu). Nama tempo (Largo, Andante, Allegro, ...) ditampilkan
+- Birama 2/4, 3/4, 4/4, 5/4, 6/8, 7/8, atau tanpa birama. Klik titik ketukan untuk mengganti jadi aksen, biasa, atau diam (pola diingat per birama)
+- Pecahan ketukan: ♩, ♫ seperdelapan, triol, ♬ seperenambelas, dengan hitungan "1 e & a" di layar
+- Suara klik, kayu, atau beep, plus volume. Dijadwalkan lewat jam audio (Web Audio), jadi tetap presisi walau layar sibuk
+- Otomatis berhenti saat pindah halaman atau saat audio lain diputar
+
 ## Encore App
 
 `backend/` berisi server Python (FastAPI) yang menyajikan tampilan yang sama plus pipeline analisisnya. `backend/main.py` menyalakan server di http://localhost:8765 lalu membuka browser.
@@ -129,7 +137,7 @@ Import repo ini di Vercel, pilih Framework Preset **Other**, lalu Deploy. Yang t
 
 | Path | Isi |
 |---|---|
-| `index.html`, `app/` | Tampilan: `core.js`, `playlist.js`, `bass.js` (Breakdown), `ear.js` (Perfect Pitch), `tuner.js` (Tuner), `spectrum.js` (Cek frekuensi), `aimode.js` (mode cepat/AI), `getapp.js` (halaman download), `sync.js`, `tour.js` (tur Cara pakai), `main.js`, `styles.css` |
+| `index.html`, `app/` | Tampilan: `core.js`, `playlist.js`, `bass.js` (Breakdown), `ear.js` (Perfect Pitch), `tuner.js` (Tuner), `metronome.js` (Metronome), `spectrum.js` (Cek frekuensi), `aimode.js` (mode cepat/AI), `getapp.js` (halaman download), `sync.js`, `tour.js` (tur Cara pakai), `main.js`, `styles.css` |
 | `app/config.js` | Alamat rilis Encore App |
 | `api/` | Fungsi Vercel untuk Drive & judul |
 | `backend/app.py` | Server Encore App: antrian, library, file stem/MIDI, Drive & judul |

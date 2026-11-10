@@ -65,9 +65,9 @@ const tours = {
       text: "Atur volume, atau klik ikon speaker untuk mute dan unmute.",
     },
     {
-      target: '.nav-item[data-nav="bass"], .nav-item[data-nav="ear"], .nav-item[data-nav="tuner"]',
+      target: '.nav-item[data-nav="bass"], .nav-item[data-nav="ear"], .nav-item[data-nav="tuner"], .nav-item[data-nav="metro"]',
       title: "Menu lainnya",
-      text: "Breakdown, Perfect Pitch, dan Tuner. Tiap menu punya tur singkatnya sendiri yang muncul waktu pertama kali kamu buka.",
+      text: "Breakdown, Perfect Pitch, Tuner, dan Metronome. Tiap menu punya tur singkatnya sendiri yang muncul waktu pertama kali kamu buka.",
     },
     {
       target: "#shortcutsBtn",
@@ -220,6 +220,35 @@ const tours = {
       target: ".tuner-foot",
       title: "Nada acuan",
       text: "Standarnya A4 = 440 Hz. Ubah kalau bandmu pakai acuan lain, klik angkanya untuk kembali ke 440.",
+    },
+  ],
+
+  // metronome
+  metro: () => [
+    {
+      target: ".metro-tempo",
+      title: "Atur tempo",
+      text: "Geser slider atau klik panah untuk ubah BPM. Di keyboard: ↑ ↓ (tahan Shift untuk lompat 5). Nama tempo (Andante, Allegro, ...) ikut berubah.",
+    },
+    {
+      target: "#metroTap",
+      title: "Tap tempo",
+      text: "Belum tahu tempo lagunya? Ketuk tombol ini (atau tekan T) beberapa kali mengikuti ketukan lagu, BPM langsung menyesuaikan.",
+    },
+    {
+      target: "#metroBeats",
+      title: "Titik ketukan",
+      text: "Titik menyala mengikuti ketukan. Klik satu titik untuk ganti bunyinya: aksen (lebih tinggi), biasa, atau diam. Diam berguna untuk latihan tanpa klik di ketukan tertentu.",
+    },
+    {
+      target: ".metro-opts",
+      title: "Birama, ketukan, suara",
+      text: "Pilih birama (4/4, 3/4, 6/8, ...), pecahan ketukan (♫ seperdelapan, triol, ♬ seperenambelas), jenis suara, dan volume. Semua pilihan diingat.",
+    },
+    {
+      target: "#metroToggle",
+      title: "Mulai",
+      text: "Klik Mulai atau tekan Spasi. Metronome otomatis berhenti saat pindah halaman atau saat lagu di Playlist diputar.",
     },
   ],
 };

@@ -6,12 +6,14 @@ import { initBass, enterBassHome, enterSong, leaveSong, submitLink } from "./bas
 import { startTour, maybeStartTour } from "./tour.js";
 import { initEar, enterEar } from "./ear.js";
 import { initTuner, enterTuner } from "./tuner.js";
+import { initMetronome, enterMetronome } from "./metronome.js";
 import { checkUiUpdate } from "./uiupdate.js";
 import { checkAppUpdate } from "./appupdate.js";
 
 router.add(/^#\/?$/, "playlist", () => { leaveSong(); document.title = "Encore"; });
 router.add(/^#\/perfect-pitch\/?$/, "ear", () => { leaveSong(); enterEar(); document.title = "Perfect Pitch · Encore"; });
 router.add(/^#\/tuner\/?$/, "tuner", () => { leaveSong(); enterTuner(); document.title = "Tuner · Encore"; });
+router.add(/^#\/metronome\/?$/, "metro", () => { leaveSong(); enterMetronome(); document.title = "Metronome · Encore"; });
 router.add(/^#\/breakdown\/?$/, "bass", () => enterBassHome());
 router.add(/^#\/breakdown\/(\w+)$/, "song", (id) => enterSong(id));
 // older links (ngulik, bass section, delve)
@@ -41,6 +43,7 @@ initBass();
 initPlaylist();
 initEar();
 initTuner();
+initMetronome();
 // its first, synchronous part only saved the defaults; from here on saved changes count as the newest (sync.js)
 store.booting = false;
 // the bass pages depend on the local server, so learn whether it is there before routing

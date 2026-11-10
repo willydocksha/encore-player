@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Encore</title>
-<meta name="description" content="Teman latihan musik: playlist latihan dengan loop & speed, breakdown instrumen lagu, latihan perfect pitch, dan tuner gitar/bass.">
+<meta name="description" content="Teman latihan musik: playlist latihan dengan loop & speed, breakdown instrumen lagu, latihan perfect pitch, tuner gitar/bass, dan metronome.">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="icon" href="/icon-192.png">
@@ -60,6 +60,7 @@
     <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 3L5 13.5h6L10 21l8-10.5h-6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
     <symbol id="i-ear" viewBox="0 0 24 24"><path d="M7 9a5 5 0 0 1 10 0c0 3-2.5 3.8-3.2 6-.5 1.6-1.4 3.5-3.8 3.5A2.8 2.8 0 0 1 7.2 16M10 9.5a2 2 0 0 1 4 0c0 1.2-1.2 1.6-1.6 2.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-tuner" viewBox="0 0 24 24"><path d="M9 3v7a3 3 0 0 0 6 0V3M12 13v8M9 21h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-metro" viewBox="0 0 24 24"><path d="M9.5 3h5l4.5 18H5zM12 16l5-10M7 16.5h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
     <symbol id="i-mac" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 20h8M12 16v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   </defs>
@@ -90,6 +91,9 @@
     </a>
     <a class="nav-item" href="#/tuner" data-nav="tuner" title="Tuner">
       <svg><use href="#i-tuner"/></svg><span>Tuner</span>
+    </a>
+    <a class="nav-item" href="#/metronome" data-nav="metro" title="Metronome">
+      <svg><use href="#i-metro"/></svg><span>Metronome</span>
     </a>
     <div class="nav-foot">
       <button class="nav-item ghost" type="button" id="tourBtn" title="Cara pakai Encore"><svg><use href="#i-help"/></svg><span>Cara pakai</span></button>
@@ -411,6 +415,14 @@
             <button type="button" id="bPitchUp" title="Naikkan setengah nada (=)" aria-label="Naikkan nada">+</button>
           </div>
         </div>
+        <div class="dock-group">
+          <span class="label">Click</span>
+          <div class="seg" id="bClick" role="group" aria-label="Click">
+            <button type="button" id="clickToggle" title="Click ikut beat lagu (K)" aria-pressed="false">Off</button>
+            <button type="button" id="clickCount" title="Hitungan 1 bar sebelum lagu mulai" aria-pressed="false">Hitung</button>
+          </div>
+          <input type="range" id="clickVol" class="click-vol" min="0.05" max="1" step="0.05" value="0.6" aria-label="Volume click" title="Volume click">
+        </div>
         <div class="dock-group extra">
           <span class="label">Loop</span>
           <div class="seg">
@@ -533,6 +545,42 @@
         </section>
       </div>
     </section>
+    <!-- ============================================================ METRONOME -->
+    <section class="view" id="view-metro" data-view="metro" hidden>
+      <header class="page-head">
+        <div>
+          <p class="eyebrow">Metronome</p>
+          <h1>Jaga tempo latihanmu</h1>
+        </div>
+      </header>
+      <div class="metro-wrap">
+        <section class="card metro-card" id="metroCard">
+          <div class="metro-beats" id="metroBeats"></div>
+          <div class="metro-tempo">
+            <button class="icon-btn lg" type="button" id="metroMinus" title="Pelankan 1 BPM (↓)"><svg><use href="#i-down"/></svg></button>
+            <div class="metro-bpm">
+              <span class="metro-flash" id="metroFlash"></span>
+              <b id="metroBpm">100</b>
+              <span class="metro-unit">BPM · <i id="metroTerm"></i></span>
+              <span class="metro-count" id="metroCount"></span>
+            </div>
+            <button class="icon-btn lg" type="button" id="metroPlus" title="Cepatkan 1 BPM (↑)"><svg><use href="#i-up"/></svg></button>
+          </div>
+          <input class="metro-slider" type="range" id="metroSlider" min="30" max="300" step="1" aria-label="Tempo (BPM)">
+          <div class="metro-acts">
+            <button class="btn metro-tap" type="button" id="metroTap" title="Ketuk beberapa kali mengikuti lagu (T)">Tap tempo</button>
+            <button class="btn primary lg" type="button" id="metroToggle"><svg><use href="#i-play"/></svg><span>Mulai</span></button>
+          </div>
+          <p class="ear-small center">Klik titik ketukan untuk ganti: <b>aksen</b>, biasa, atau diam.</p>
+        </section>
+        <section class="card metro-opts">
+          <div class="metro-row"><span>Birama</span><div class="tuner-inst" id="metroSig"></div></div>
+          <div class="metro-row"><span>Ketukan</span><div class="seg" id="metroSub"></div></div>
+          <div class="metro-row"><span>Suara</span><div class="seg" id="metroSound"></div></div>
+          <div class="metro-row"><span>Volume</span><input type="range" id="metroVol" min="0" max="1" step="0.05" aria-label="Volume metronome"></div>
+        </section>
+      </div>
+    </section>
   </main>
 </div>
 
@@ -645,6 +693,26 @@ https://youtu.be/…"></textarea>
   </form>
 </dialog>
 
+<!-- export audio: pick one or more versions, each becomes one mp3 -->
+<dialog class="sheet small" id="exportDialog">
+  <form method="dialog" class="sheet-inner">
+    <header class="sheet-head">
+      <h2>Export audio</h2>
+      <button class="icon-btn" value="cancel" aria-label="Tutup"><svg><use href="#i-x"/></svg></button>
+    </header>
+    <p>Centang satu atau beberapa versi. Tiap versi jadi satu file MP3.</p>
+    <div class="export-opts" id="exportOpts"></div>
+    <div class="export-extra">
+      <label class="check-row plain"><input type="checkbox" id="exportClick"> Tambahkan click (ikut beat lagu)</label>
+      <label class="check-row plain" id="exportPitchRow"><input type="checkbox" id="exportPitch"> <span id="exportPitchLabel">Ikut nada</span></label>
+    </div>
+    <footer class="sheet-foot">
+      <button class="btn" value="cancel">Batal</button>
+      <button class="btn primary" value="ok" id="exportGo"><svg><use href="#i-download"/></svg><span id="exportGoLabel">Export</span></button>
+    </footer>
+  </form>
+</dialog>
+
 <!-- confirm -->
 <dialog class="sheet small" id="confirm">
   <form method="dialog" class="sheet-inner">
@@ -689,6 +757,7 @@ https://youtu.be/…"></textarea>
           <dt><kbd>A</kbd> <kbd>B</kbd></dt><dd>set titik loop</dd>
           <dt><kbd>L</kbd> <kbd>Esc</kbd></dt><dd>loop on/off / hapus</dd>
           <dt><kbd>−</kbd> <kbd>=</kbd></dt><dd>nada turun / naik setengah</dd>
+          <dt><kbd>K</kbd></dt><dd>click on/off</dd>
           <dt><kbd>M</kbd></dt><dd>multitrack</dd>
           <dt><kbd>V</kbd></dt><dd>bagian berikutnya (drum, bass, vokal, …)</dd>
           <dt><kbd>T</kbd></dt><dd>grafik ↔ tab (bass, gitar)</dd>
@@ -713,6 +782,15 @@ https://youtu.be/…"></textarea>
           <dt><kbd>Space</kbd></dt><dd>nyalakan / matikan mikrofon</dd>
           <dt><kbd>T</kbd></dt><dd>ganti Tuner / Cek frekuensi</dd>
           <dt><kbd>1</kbd>–<kbd>6</kbd></dt><dd>bunyikan &amp; kunci senar</dd>
+        </dl>
+      </div>
+      <div>
+        <h3>Metronome</h3>
+        <dl class="keys">
+          <dt><kbd>Space</kbd></dt><dd>mulai / stop</dd>
+          <dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>tempo ±1 BPM (Shift ±5)</dd>
+          <dt><kbd>T</kbd></dt><dd>tap tempo</dd>
+          <dt><kbd>1</kbd>–<kbd>4</kbd></dt><dd>ketukan ♩ / ♫ / triol / ♬</dd>
         </dl>
       </div>
     </div>
