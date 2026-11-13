@@ -377,7 +377,7 @@ select { background: var(--surface-2); border: 1px solid var(--line); border-rad
 .link-btn { border: 0; background: none; padding: 0; font: .76rem var(--f-body); color: var(--accent); cursor: pointer; text-align: left; }
 .link-btn.ghost { color: var(--ok); cursor: default; display: inline-grid; place-items: center; }
 .link-btn.ghost svg { width: 16px; height: 16px; }
-.queue-head #openEditor { flex: none; }
+.queue-actions { display: flex; align-items: center; gap: 8px; flex: none; }
 .queue { list-style: none; margin: 0; padding: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
 .q-item {
   /* number column doubles as the drag grip on hover, actions only take space on hover */

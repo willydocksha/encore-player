@@ -44,12 +44,12 @@ function loadScript(src) {
   return libs.get(src);
 }
 
-async function newPeer(id) {
+export async function newPeer(id) {
   await loadScript("/app/vendor/peerjs.min.js");
   return id ? new window.Peer(id, { debug: 0 }) : new window.Peer({ debug: 0 });
 }
 
-const randomCode = () => Array.from(crypto.getRandomValues(new Uint8Array(5)), (b) => ALPHA[b % ALPHA.length]).join("");
+export const randomCode = () => Array.from(crypto.getRandomValues(new Uint8Array(5)), (b) => ALPHA[b % ALPHA.length]).join("");
 export const cleanCode = (s) => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
 
 // link a phone camera opens: always the online site, a laptop's localhost is out of reach for a phone

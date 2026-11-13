@@ -4,6 +4,7 @@ import { $, $$, el, icon, setIcon, store, fmtTime, textOverflows, parseLink, toa
 // waits for the first sync, so the state below already includes what the other page saved
 import { onRemote, appBase } from "./sync.js";
 import { pitchNode, fmtSemis, clampSemis } from "./pitch.js";
+import { startShare, stopShare, share, shareUrl, qrSvg, receiveShare } from "./playlistshare.js";
 
 const audio = $("#audio");
 let list = store.get("lp-playlist", []); // [{url,type,id,start,title,note,bad}]
@@ -140,6 +141,64 @@ function setName(n) {
   $("#plName").textContent = n || "Playlist";
 }
 
+// ------------------------------------------------------------------ copy playlist to a phone (qr, one-shot)
+
+let plQrFor = "";
+function renderShare() {
+  $("#plShareCode").textContent = share.code || "…";
+  $("#plShareStatus").textContent = share.status;
+  const url = shareUrl();
+  if (!share.code || plQrFor === url) return;
+  plQrFor = url;
+  $("#plShareLink").textContent = url.replace(/^https?:\/\//, "");
+  qrSvg(url).then((svg) => { $("#plShareQr").innerHTML = svg; }).catch(() => { $("#plShareQr").textContent = "QR gagal dimuat"; });
+}
+
+$("#plShareBtn").onclick = async () => {
+  plQrFor = "";
+  $("#plShareQr").textContent = "";
+  $("#plShare").showModal();
+  await startShare({ list, name: store.get("lp-name", null) }, renderShare);
+  renderShare();
+};
+$("#plShareCopy").onclick = async () => {
+  try { await navigator.clipboard.writeText(shareUrl()); toast("Link disalin"); } catch { toast(shareUrl()); }
+};
+// camera-scanned qr closes the dialog itself once it opens on the phone; this device stops offering once closed
+new MutationObserver(() => { if (!$("#plShare").open) stopShare(); })
+  .observe($("#plShare"), { attributes: true, attributeFilter: ["open"] });
+
+// phone side: opened from the qr link above (#/?copy=code), fetch the list once and offer to add or replace
+export async function importShared(code) {
+  let data;
+  try { data = await receiveShare(code); }
+  catch (e) { toast("Gagal menyalin playlist. " + (e?.message || ""), { error: true }); return; }
+  if (!data.list.length) { toast("Playlist yang dibagikan kosong"); return; }
+  const add = data.list.filter((x) => !list.some((y) => y.type === x.type && y.id === x.id));
+  $("#plImportMsg").textContent = `${data.list.length} lagu diterima` + (data.name ? ` dari “${data.name}”` : "")
+    + (add.length < data.list.length ? ` · ${data.list.length - add.length} sudah ada di sini` : "");
+  $("#plImportAdd").onclick = () => {
+    $("#plImport").close();
+    if (!add.length) { toast("Semua lagu sudah ada di playlist ini"); return; }
+    const wasEmpty = !list.length;
+    list.push(...add);
+    save(); renderQueue(); add.forEach(fetchTitle); prefetchAll();
+    toast(`${add.length} lagu ditambahkan`);
+    if (wasEmpty) playIndex(0, false);
+  };
+  $("#plImportReplace").onclick = async () => {
+    if (list.length && !(await confirmDialog("Ganti seluruh playlist?", `${list.length} lagu sekarang akan diganti dengan ${data.list.length} lagu yang diterima.`, { ok: "Ganti", danger: true }))) return;
+    $("#plImport").close();
+    stop(); list = data.list.map((x) => ({ ...x })); idx = -1; cur = null; history = []; played = new Set();
+    if (data.name) setName(data.name);
+    save(); renderQueue(); list.forEach(fetchTitle);
+    toast(`Playlist diganti, ${list.length} lagu`);
+    playIndex(0, false);
+    prefetchAll();
+  };
+  $("#plImport").showModal();
+}
+
 async function removeAt(i) {
   const playing = i === idx;
   list.splice(i, 1);
@@ -219,6 +278,7 @@ function renderQueue() {
   ol.hidden = !list.length;
   $("#offlineHint").hidden = !hasCache || !list.some((x) => x.type === "drive" && cached.has(x.id));
   $("#count").textContent = list.length ? `${list.length} lagu` : "";
+  $("#plShareBtn").hidden = !list.length;
   const playing = isPlaying();
   const rows = list.map((it, i) => {
     const li = el("li", "q-item" + (i === idx ? " cur" : "") + (it.bad ? " bad" : ""));

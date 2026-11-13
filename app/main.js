@@ -1,7 +1,7 @@
 // boot: routes, cross-section wiring, shortcuts, service worker
 
 import { $, router, server, store } from "./core.js";
-import { initPlaylist, onSendToBass } from "./playlist.js";
+import { initPlaylist, onSendToBass, importShared } from "./playlist.js";
 import { initBass, enterBassHome, enterSong, leaveSong, submitLink } from "./bass.js";
 import { startTour, maybeStartTour } from "./tour.js";
 import { initEar, enterEar } from "./ear.js";
@@ -10,7 +10,12 @@ import { initMetronome, enterMetronome } from "./metronome.js";
 import { checkUiUpdate } from "./uiupdate.js";
 import { checkAppUpdate } from "./appupdate.js";
 
-router.add(/^#\/?$/, "playlist", () => { leaveSong(); document.title = "Encore"; });
+router.add(/^#\/?(?:\?copy=(\w+))?$/, "playlist", (code) => {
+  leaveSong();
+  document.title = "Encore";
+  // opened from a "copy to phone" qr: tidy the address, then fetch the shared list
+  if (code) { history.replaceState(null, "", "#/"); importShared(code); }
+});
 router.add(/^#\/perfect-pitch\/?$/, "ear", () => { leaveSong(); enterEar(); document.title = "Perfect Pitch · Encore"; });
 router.add(/^#\/tuner\/?$/, "tuner", () => { leaveSong(); enterTuner(); document.title = "Tuner · Encore"; });
 router.add(/^#\/metronome\/?(?:\?sync=(\w+))?$/, "metro", (code) => { leaveSong(); enterMetronome(code); document.title = "Metronome · Encore"; });
