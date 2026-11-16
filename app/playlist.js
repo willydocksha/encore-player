@@ -401,7 +401,13 @@ const P = {
     cur?.type === "yt" ? ytReady && yt.seekTo(t, true) : (audio.currentTime = t);
   },
   setRate(r) { if (ytReady) yt.setPlaybackRate(r); audio.playbackRate = r; audio.defaultPlaybackRate = r; },
-  setVol(v) { if (ytReady) yt.setVolume(v); audio.volume = v / 100; },
+  setVol(v) {
+    if (ytReady) yt.setVolume(Math.min(100, v)); // youtube player can't go past 100
+    audio.volume = Math.min(1, Math.max(0, v / 100));
+    const boost = v > 100 ? v / 100 : 1;
+    if (boost > 1) eqWake(); // route through web audio so the extra gain actually applies
+    if (boostGain) boostGain.gain.setTargetAtTime(boost, eqCtx.currentTime, 0.03);
+  },
 };
 export const pausePlaylist = () => P.pause();
 media.register("playlist", () => P.pause());
@@ -614,7 +620,7 @@ function setMuted(m) {
 $("#volBtn").onclick = () => setMuted(!muted);
 $("#vol").oninput = (e) => { store.set("lp-vol", +e.target.value); setMuted(false); };
 function nudgeVol(d) {
-  const v = Math.min(100, Math.max(0, +$("#vol").value + d));
+  const v = Math.min(200, Math.max(0, +$("#vol").value + d));
   $("#vol").value = v;
   store.set("lp-vol", v);
   setMuted(false);
@@ -650,7 +656,7 @@ function eqLoad() {
   });
 }
 let eqGains = eqLoad();
-let eqCtx = null, eqNodes = null, eqPre = null, normGain = null, limiter = null, meter = null, shifter = null;
+let eqCtx = null, eqNodes = null, eqPre = null, normGain = null, limiter = null, meter = null, shifter = null, boostGain = null;
 const eqFlat = () => eqGains.every((g) => !g);
 
 // build the filter chain on first use
@@ -669,7 +675,10 @@ function eqGraph() {
     normGain = eqCtx.createGain();
     limiter = eqCtx.createDynamicsCompressor();
     limiter.knee.value = 0; limiter.attack.value = 0.003; limiter.release.value = 0.25;
-    [src, eqPre, ...eqNodes, normGain, limiter].reduce((a, b) => (a.connect(b), b)).connect(eqCtx.destination);
+    // manual volume boost (>100%) sits after the limiter: louder than normal on purpose, clipping included
+    boostGain = eqCtx.createGain();
+    boostGain.gain.value = vol() > 100 ? vol() / 100 : 1;
+    [src, eqPre, ...eqNodes, normGain, limiter, boostGain].reduce((a, b) => (a.connect(b), b)).connect(eqCtx.destination);
     // side branch that measures the raw level for the live estimate
     meter = eqCtx.createAnalyser(); meter.fftSize = 8192;
     src.connect(meter);
@@ -687,7 +696,7 @@ function applyGains() {
 }
 // make sure the context runs before (or while) audio plays
 function eqWake() {
-  if (!eqCtx && (!eqFlat() || norm || songPitch())) eqGraph();
+  if (!eqCtx && (!eqFlat() || norm || songPitch() || vol() > 100)) eqGraph();
   if (eqCtx?.state === "suspended") eqCtx.resume().catch(() => {});
 }
 function setEq(g) {
