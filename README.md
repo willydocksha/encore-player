@@ -9,6 +9,62 @@ Teman latihan musikmu. Encore punya empat bagian:
 
 Playlist, Perfect Pitch, dan Tuner jalan langsung di browser (web maupun Encore App).
 
+## Teknologi
+
+Encore terdiri dari dua bagian: **tampilan web** (sama persis di Vercel dan di Encore App) dan **server Python lokal** di Encore App untuk analisis berat.
+
+### Tampilan (browser)
+
+| Teknologi | Dipakai untuk | Kenapa |
+|---|---|---|
+| **HTML + CSS + JavaScript murni** (ES modules, tanpa framework dan bundler) | Semua tampilan di `index.html` dan `app/*.js` | File yang sama bisa disajikan Vercel, `dev.mjs`, maupun Encore App tanpa build. Ini juga yang memungkinkan update tampilan tanpa rilis app baru (`/api/ui`) |
+| **PWA** (`sw.js`, `manifest.webmanifest`) | Bisa di-install di HP/desktop dan dibuka offline | Terasa seperti app tanpa harus lewat app store |
+| **YouTube IFrame Player API** | Memutar lagu YouTube di Playlist | Cara resmi memutar YouTube dengan kontrol kecepatan dan posisi |
+| **Web Audio API** + **AudioWorklet** (`pitch-worklet.js`) | Tuner, deteksi nada, cek frekuensi, metronome, playback stem | Proses audio real-time dengan latensi rendah langsung di browser, tanpa server |
+| **getUserMedia** | Mikrofon/audio interface untuk Tuner, kamera untuk scan QR | API bawaan browser, tanpa plugin |
+| **localStorage** + `/api/sync` | Playlist dan pengaturan, disinkronkan antara versi online dan Encore App lewat `http://localhost:8765` | Tanpa akun dan tanpa database online. Datanya tetap di komputer pengguna |
+
+### Fungsi online (Vercel)
+
+| Teknologi | Dipakai untuk | Kenapa |
+|---|---|---|
+| **Vercel Functions** (Node, `api/*.js`) | `drive.js` meneruskan audio Google Drive, `title.js` mengambil judul lagu, `ui.js` memberi sha1 file tampilan untuk update otomatis | Browser tidak bisa langsung mengambil file Drive (CORS), jadi butuh perantara kecil. Region `sin1` (Singapura) supaya dekat dengan pengguna |
+
+### Encore App (server lokal + analisis)
+
+| Teknologi | Dipakai untuk | Kenapa |
+|---|---|---|
+| **Python 3.12** + **FastAPI** + **uvicorn** | Server di `localhost:8765`: antrian, library lagu, file stem/MIDI, sync | Ekosistem audio/AI paling lengkap ada di Python. FastAPI ringan dan cepat untuk API lokal |
+| **yt-dlp** + **imageio-ffmpeg** | Mengunduh audio YouTube dan mengubah format audio | yt-dlp paling andal untuk YouTube. ffmpeg ikut dibundel, jadi pengguna tidak perlu install sendiri |
+| **Demucs v4** (Meta) di atas **PyTorch** | Memisahkan stem drum, bass, vokal, gitar, piano, lainnya | Model open source terbaik untuk source separation. Di Mac memakai GPU Apple (MPS) |
+| **librosa** (pYIN, chroma CQT) | Transkripsi not bass/vokal dan deteksi chord | Algoritma klasik yang akurat dan tidak butuh GPU |
+| **Basic Pitch** (Spotify) via **onnxruntime** | Not cepat seperti slap/pop yang sulit untuk pYIN | Model ONNX-nya saja yang dipakai, jadi tidak perlu TensorFlow |
+| **beat_this** (CPJKU) | Tempo, beat, dan downbeat | Lebih akurat dari deteksi beat librosa. librosa tetap jadi fallback |
+| **pretty_midi**, **mir_eval** | Menulis file MIDI dan utilitas evaluasi musik | Library standar untuk MIDI dan musik di Python |
+| **PyInstaller** + **pyobjc** (Mac) | Membungkus jadi app Mac/Windows/Linux, ikon Dock | Pengguna tidak perlu install Python. Mesin AI (PyTorch, besar) dipisah jadi EncoreAI supaya download pertama kecil |
+| **GitHub Actions** (`release.yml`) | Build ketiga OS, smoke test, lalu terbitkan GitHub Release | Satu tag langsung menghasilkan rilis untuk semua OS |
+| **uv** | Membuat venv dan install dependency | Jauh lebih cepat dari pip |
+
+Folder `models/` berisi ekspor ONNX dari Demucs, beat_this, dan Basic Pitch (bobot fp16 supaya ukurannya setengah). Detailnya ada di `models/README.md`.
+
+### Alur Breakdown
+
+```
+link YouTube / Drive / file
+   │  yt-dlp / Drive / upload          (backend/app.py)
+   ▼
+audio
+   │  Demucs                           pisah stem
+   │  pYIN + Basic Pitch               not bass & vokal
+   │  beat_this                        tempo & beat
+   │  chroma + Viterbi                 chord
+   ▼  (backend/pipeline.py, dijalankan mesin AI per lagu)
+stem .mp3 + MIDI + analysis.json
+   │
+   ▼
+tampilan Breakdown (app/bass.js): not, tab, chord, mixer stem
+```
+
 ## Playlist
 
 - Playlist dari daftar link (YouTube & Google Drive bisa dicampur), auto next
