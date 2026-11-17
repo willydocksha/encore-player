@@ -35,6 +35,11 @@ const tours = {
       text: "Tempel link YouTube atau Google Drive. Bisa juga langsung tempel satu chat daftar lagu dari WhatsApp, judul dan catatannya ikut terbaca.",
     },
     {
+      target: ".pl-slots-row",
+      title: "Playlist tersimpan",
+      text: "Lagi banyak tugas ngulik sekaligus? Simpan playlist yang sedang aktif lewat tombol daftar ini, lalu ganti-ganti kapan saja lewat huruf A, B, C... (hover untuk lihat namanya). Lagu yang pernah di-download offline tetap tersimpan waktu ganti-ganti, tidak perlu download ulang.",
+    },
+    {
       target: ".queue-card",
       title: "Antrian lagu",
       text: "Klik lagu untuk memutarnya. Tahan ⋮⋮ lalu geser untuk ubah urutan. Tombol ⋯ untuk buka link asli, ganti link, atau hapus lagu.",

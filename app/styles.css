@@ -379,7 +379,17 @@ select { background: var(--surface-2); border: 1px solid var(--line); border-rad
 .link-btn.ghost { color: var(--ok); cursor: default; display: inline-grid; place-items: center; }
 .link-btn.ghost svg { width: 16px; height: 16px; }
 .queue-actions { display: flex; align-items: center; gap: 8px; flex: none; }
-.queue { list-style: none; margin: 0; padding: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.queue {
+  list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px;
+  /* only scroll vertically: without an explicit overflow-x, the browser auto-promotes it
+     too once overflow-y is set, which showed a horizontal scrollbar whenever a row was wide */
+  overflow-y: auto; overflow-x: hidden;
+  /* thin, theme-colored scrollbar instead of the browser's default chunky gray bar */
+  scrollbar-width: thin; scrollbar-color: var(--line) transparent;
+}
+.queue::-webkit-scrollbar { width: 6px; }
+.queue::-webkit-scrollbar-track { background: transparent; }
+.queue::-webkit-scrollbar-thumb { background: var(--line); border-radius: 99px; }
 .q-item {
   /* number column doubles as the drag grip on hover, actions only take space on hover */
   position: relative; display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: 6px;
