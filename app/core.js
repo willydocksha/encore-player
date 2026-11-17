@@ -24,7 +24,7 @@ export function setIcon(button, name) {
 }
 
 // settings shared between the online site and the encore app (sync.js); the rest stays per page
-export const SYNC_KEYS = ["lp-playlist", "lp-index", "lp-name", "lp-repeat", "lp-shuffle", "lp-autonext", "lp-rate", "lp-playlists",
+export const SYNC_KEYS = ["lp-playlist", "lp-index", "lp-name", "lp-repeat", "lp-shuffle", "lp-autonext", "lp-rate", "lp-playlists", "lp-active-saved",
   "bass-mixer", "bass-part", "bd-mode", "nav-folded", "tour-done", "tour-seen", "pitch-progress", "pitch-level", "metro-songs"];
 
 export const store = {

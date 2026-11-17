@@ -1169,7 +1169,8 @@ div.sheet:not([hidden]) { flex: 1; min-height: 300px; display: flex; flex-direct
 
 /* saved playlists: same list/rename/add pattern as metro-song above, playlist accent color */
 .pl-saved-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 50vh; overflow: auto; }
-.pl-saved-item { display: flex; align-items: center; gap: 6px; border-radius: 10px; padding-right: 4px; }
+.pl-saved-item { display: flex; align-items: center; gap: 6px; border-radius: 10px; padding-right: 4px; border: 1px solid transparent; }
+.pl-saved-item.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .pl-saved-main {
   flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 8px 8px; border: 0; background: none;
   color: var(--ink); font: inherit; text-align: left; cursor: pointer; border-radius: 10px;
@@ -1189,6 +1190,16 @@ div.sheet:not([hidden]) { flex: 1; min-height: 300px; display: flex; flex-direct
   background: var(--surface-2); color: var(--ink); font: inherit;
 }
 .pl-saved-add input:focus { outline: none; border-color: var(--accent); }
+
+/* quick-switch letter slots in the page head, one per saved playlist */
+.pl-slots-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pl-slots { display: flex; gap: 6px; flex-wrap: wrap; }
+.pl-slot {
+  width: 30px; height: 30px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface-2);
+  color: var(--ink); font: 600 .85rem var(--f-mono); cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.pl-slot:hover { background: var(--surface-3, var(--surface-2)); }
+.pl-slot.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
 .metro-song-add .btn { flex: none; }
 .metro-opts { padding: 8px 18px; }
 .metro-row { display: flex; align-items: center; gap: 14px; padding: 10px 0; flex-wrap: wrap; }

@@ -116,7 +116,11 @@
           <p class="eyebrow">Playlist latihan</p>
           <h1 id="plName">Playlist</h1>
         </div>
-        <button class="btn ghost sm" type="button" id="plSavedBtn" title="Simpan playlist ini, atau ganti ke playlist tersimpan lainnya"><svg><use href="#i-list"/></svg>Playlist tersimpan</button>
+        <div class="pl-slots-row">
+          <!-- one lettered slot per saved playlist: hover for its name, click to switch straight away -->
+          <div class="pl-slots" id="plSlots"></div>
+          <button class="icon-btn" type="button" id="plSavedBtn" title="Playlist tersimpan: simpan, ganti nama, atau hapus"><svg><use href="#i-list"/></svg></button>
+        </div>
       </header>
 
       <div class="pl-grid">
@@ -680,6 +684,22 @@ https://youtu.be/…"></textarea>
     </div>
     <footer class="sheet-foot">
       <button class="btn" value="cancel">Tutup</button>
+    </footer>
+  </form>
+</dialog>
+
+<!-- asked when switching to another saved playlist while the active one is new or has unsaved changes -->
+<dialog class="sheet small" id="plSwitch">
+  <form method="dialog" class="sheet-inner">
+    <header class="sheet-head">
+      <h2>Simpan dulu?</h2>
+      <button class="icon-btn" value="cancel" aria-label="Tutup"><svg><use href="#i-x"/></svg></button>
+    </header>
+    <p id="plSwitchText"></p>
+    <footer class="sheet-foot">
+      <button class="btn" value="cancel">Batal</button>
+      <button class="btn" value="discard">Ganti tanpa simpan</button>
+      <button class="btn primary" value="save">Simpan & ganti</button>
     </footer>
   </form>
 </dialog>

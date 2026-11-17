@@ -108,7 +108,7 @@ function addLinks(replace) {
   const text = $("#links").value;
   const { ok, bad, name } = extract(text);
   if (!ok.length) return;
-  if (replace) { stop(); list = []; idx = -1; cur = null; history = []; played = new Set(); }
+  if (replace) { stop(); list = []; idx = -1; cur = null; history = []; played = new Set(); setActiveSaved(null); }
   const wasEmpty = !list.length;
   if (wasEmpty) setName(name);
   list.push(...ok);
@@ -141,12 +141,22 @@ function setName(n) {
   $("#plName").textContent = n || "Playlist";
 }
 
-// ------------------------------------------------------------------ saved playlists (several daftar lagu, switch without losing the others)
+// ------------------------------------------------------------------ saved playlists (several daftar lagu: quick-switch letter slots, plus a dialog to manage them)
 const savedDlg = $("#plSaved");
+const switchDlg = $("#plSwitch");
 let renamingSaved = null;
+let activeSaved = store.get("lp-active-saved", null); // id of the saved playlist the active list was loaded from/saved as, or null
 
 const getSaved = () => store.get("lp-playlists", []);
 const setSaved = (arr) => store.set("lp-playlists", arr);
+function setActiveSaved(id) { activeSaved = id; store.set("lp-active-saved", id); renderSlots(); }
+
+// the active list no longer matches the saved playlist it came from (or never came from one)
+function isDirty() {
+  if (!list.length) return false;
+  const s = getSaved().find((x) => x.id === activeSaved);
+  return !s || JSON.stringify(s.list) !== JSON.stringify(list);
+}
 
 $("#plSavedBtn").onclick = () => { renamingSaved = null; renderSaved(); savedDlg.showModal(); };
 
@@ -154,8 +164,10 @@ function saveCurrentAsPlaylist(name) {
   if (!list.length) { toast("Playlist aktif masih kosong"); return; }
   const saved = getSaved();
   const nm = name.trim() || store.get("lp-name", null) || `Playlist ${saved.length + 1}`;
-  saved.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: nm, list: list.map((x) => ({ ...x })) });
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  saved.push({ id, name: nm, list: list.map((x) => ({ ...x })) });
   setSaved(saved);
+  setActiveSaved(id);
   renderSaved();
   toast(`"${nm}" disimpan`, { ms: 2000 });
 }
@@ -166,15 +178,28 @@ function submitSaveCurrent() {
 $("#plSavedSave").onclick = submitSaveCurrent;
 $("#plSavedName").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); submitSaveCurrent(); } };
 
-async function loadSavedPlaylist(id) {
-  const s = getSaved().find((x) => x.id === id);
-  if (!s) return;
-  if (list.length && !(await confirmDialog("Ganti ke playlist ini?", `${list.length} lagu sekarang akan diganti dengan "${s.name}" (${s.list.length} lagu).`, { ok: "Ganti", danger: true }))) return;
+// ask whether to save the current (unsaved/changed) list before switching away from it
+function confirmSwitch(targetName) {
+  $("#plSwitchText").textContent = `Playlist ini belum disimpan atau sudah diubah. Simpan dulu sebelum ganti ke "${targetName}"?`;
+  switchDlg.returnValue = "";
+  switchDlg.showModal();
+  return new Promise((resolve) => switchDlg.addEventListener("close", () => resolve(switchDlg.returnValue), { once: true }));
+}
+
+async function switchTo(id) {
+  const target = getSaved().find((x) => x.id === id);
+  if (!target || id === activeSaved) { savedDlg.close(); return; }
+  if (isDirty()) {
+    const choice = await confirmSwitch(target.name);
+    if (choice !== "save" && choice !== "discard") return; // batal / tutup: stay on the current playlist
+    if (choice === "save") { if (activeSaved) overwriteSaved(activeSaved); else saveCurrentAsPlaylist(store.get("lp-name", null) || ""); }
+  }
   savedDlg.close();
-  stop(); list = s.list.map((x) => ({ ...x })); idx = -1; cur = null; history = []; played = new Set();
-  setName(s.name);
+  stop(); list = target.list.map((x) => ({ ...x })); idx = -1; cur = null; history = []; played = new Set();
+  setName(target.name);
+  setActiveSaved(target.id);
   save(); renderQueue(); list.forEach(fetchTitle);
-  toast(`"${s.name}" dimuat, ${list.length} lagu`);
+  toast(`"${target.name}" dimuat, ${list.length} lagu`);
   playIndex(0, false);
   pruneCache(true); prefetchAll();
 }
@@ -184,11 +209,15 @@ function overwriteSaved(id) {
   if (i < 0) return;
   saved[i] = { ...saved[i], list: list.map((x) => ({ ...x })) };
   setSaved(saved);
+  setActiveSaved(id);
+  renderSaved();
   toast(`"${saved[i].name}" diperbarui`, { ms: 2000 });
 }
 
 function renameSaved(id, name) {
-  if (name.trim()) setSaved(getSaved().map((x) => (x.id === id ? { ...x, name: name.trim() } : x)));
+  if (!name.trim()) { renderSaved(); return; }
+  setSaved(getSaved().map((x) => (x.id === id ? { ...x, name: name.trim() } : x)));
+  if (id === activeSaved) setName(name.trim());
   renderSaved();
 }
 
@@ -205,15 +234,16 @@ function deleteSaved(id) {
   if (i < 0) return;
   const [gone] = saved.splice(i, 1);
   setSaved(saved);
+  if (id === activeSaved) setActiveSaved(null); else renderSlots();
   renderSaved();
   toast(`"${gone.name}" dihapus`, {
     action: "Urungkan",
-    onAction: () => { const l = getSaved(); l.splice(i, 0, gone); setSaved(l); renderSaved(); },
+    onAction: () => { const l = getSaved(); l.splice(i, 0, gone); setSaved(l); renderSaved(); renderSlots(); },
   });
 }
 
 function savedRow(s, i) {
-  const li = el("li", "pl-saved-item");
+  const li = el("li", "pl-saved-item" + (s.id === activeSaved ? " on" : ""));
   // name being edited: a text field in place of the row
   if (renamingSaved === s.id) {
     const inp = el("input", "pl-saved-rename");
@@ -233,7 +263,7 @@ function savedRow(s, i) {
   const text = el("span", "pl-saved-text");
   text.append(el("span", "pl-saved-name", s.name), el("span", "pl-saved-meta", `${s.list.length} lagu`));
   main.append(el("span", "pl-saved-n", String(i + 1)), text);
-  main.onclick = () => loadSavedPlaylist(s.id);
+  main.onclick = () => switchTo(s.id);
   li.append(main);
   const more = el("button", "icon-btn");
   more.type = "button"; more.title = "Lainnya"; more.append(icon("more"));
@@ -256,6 +286,18 @@ function renderSaved() {
   const saved = getSaved();
   $("#plSavedList").replaceChildren(...saved.map(savedRow));
   $("#plSavedEmpty").hidden = saved.length > 0;
+}
+
+// quick-switch row: one lettered slot per saved playlist, hover shows its name, click switches straight away
+function slotBtn(s, i) {
+  const b = el("button", "pl-slot" + (s.id === activeSaved ? " on" : ""), String.fromCharCode(65 + (i % 26)));
+  b.type = "button";
+  b.title = `${s.name} · ${s.list.length} lagu`;
+  b.onclick = () => switchTo(s.id);
+  return b;
+}
+function renderSlots() {
+  $("#plSlots").replaceChildren(...getSaved().map(slotBtn));
 }
 
 // ------------------------------------------------------------------ copy playlist to a phone (qr, one-shot)
@@ -306,7 +348,7 @@ export async function importShared(code) {
   $("#plImportReplace").onclick = async () => {
     if (list.length && !(await confirmDialog("Ganti seluruh playlist?", `${list.length} lagu sekarang akan diganti dengan ${data.list.length} lagu yang diterima.`, { ok: "Ganti", danger: true }))) return;
     $("#plImport").close();
-    stop(); list = data.list.map((x) => ({ ...x })); idx = -1; cur = null; history = []; played = new Set();
+    stop(); list = data.list.map((x) => ({ ...x })); idx = -1; cur = null; history = []; played = new Set(); setActiveSaved(null);
     if (data.name) setName(data.name);
     save(); renderQueue(); list.forEach(fetchTitle);
     toast(`Playlist diganti, ${list.length} lagu`);
@@ -1326,12 +1368,14 @@ onRemote((keys) => {
   }
   list.forEach(fetchTitle);
   renderQueue();
+  activeSaved = store.get("lp-active-saved", null);
+  renderSlots();
   if (savedDlg.open) renderSaved();
 });
 
 // ------------------------------------------------------------------ boot
 export async function initPlaylist() {
-  paintModes(); applyRate(rate); setName(store.get("lp-name", null)); renderQueue();
+  paintModes(); applyRate(rate); setName(store.get("lp-name", null)); renderQueue(); renderSlots();
   list.forEach(fetchTitle);
   await loadCachedIds();
   await loadAppIds(1500); // so the first song can come from the app
