@@ -290,3 +290,29 @@ document.addEventListener("keyup", (e) => {
 document.addEventListener("close", (e) => {
   if (e.target.tagName === "DIALOG") setTimeout(() => document.activeElement?.closest?.("button")?.blur(), 0);
 }, true);
+
+// ------------------------------------------------------------------ instant tooltip
+// the browser's native title= shows after a long delay and can't be restyled, so every title
+// anywhere in the app (now or set later) is swapped for the fast, custom-styled [data-tip] tooltip
+
+function tipify(el) {
+  const t = el.getAttribute("title");
+  if (t == null) return;
+  el.removeAttribute("title");
+  el.dataset.tip = t;
+  // icon-only elements have no visible text to carry their accessible name, so title's text becomes it
+  if (!el.hasAttribute("aria-label") && !el.textContent.trim()) el.setAttribute("aria-label", t);
+  // only claim a positioning context if the element doesn't already have one of its own
+  if (getComputedStyle(el).position === "static") el.classList.add("has-tip-anchor");
+}
+document.querySelectorAll("[title]").forEach(tipify);
+new MutationObserver((muts) => {
+  for (const m of muts) {
+    if (m.type === "attributes") tipify(m.target);
+    else for (const n of m.addedNodes) {
+      if (n.nodeType !== 1) continue;
+      if (n.hasAttribute("title")) tipify(n);
+      n.querySelectorAll?.("[title]").forEach(tipify);
+    }
+  }
+}).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ["title"] });

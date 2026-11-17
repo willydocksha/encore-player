@@ -363,8 +363,9 @@ select { background: var(--surface-2); border: 1px solid var(--line); border-rad
 .offline-ok { display: inline-grid; place-items: center; color: var(--ok); }
 .offline-ok svg { width: 15px; height: 15px; }
 .offline-ok[hidden] { display: none; }
-/* instant tooltip for the queue checks, opens below the icon */
-[data-tip] { position: relative; }
+/* instant tooltip (replaces native title=, see core.js tipify): opens below the element.
+   positioning context is a separate class so it's only added where the element needs it */
+.has-tip-anchor { position: relative; }
 [data-tip]::after {
   content: attr(data-tip); position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%);
   width: max-content; max-width: 220px; padding: 6px 9px; border-radius: 8px; z-index: 20;
@@ -424,6 +425,9 @@ dialog[open] { animation: pop .18s ease; }
 .sheet-head h2, .sheet-inner > h2 { font-size: 1.2rem; }
 .sheet-inner > p { margin: 0; color: var(--ink-2); }
 .sheet-foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+/* 3-way confirm (save/discard/cancel): stack full-width, primary action on top */
+#plSwitch .sheet-foot { flex-direction: column-reverse; align-items: stretch; }
+#plSwitch .sheet-foot .btn { width: 100%; justify-content: center; }
 textarea {
   width: 100%; min-height: 150px; resize: vertical; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line);
   background: var(--surface-2); font: .85rem/1.55 var(--f-mono);

@@ -296,6 +296,7 @@ function slotBtn(s, i) {
   const b = el("button", "pl-slot" + (s.id === activeSaved ? " on" : ""), String.fromCharCode(65 + (i % 26)));
   b.type = "button";
   b.title = `${s.name} · ${s.list.length} lagu`;
+  b.setAttribute("aria-label", `Ganti ke playlist ${s.name}, ${s.list.length} lagu`);
   b.onclick = () => switchTo(s.id);
   return b;
 }
