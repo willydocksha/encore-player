@@ -236,10 +236,13 @@ function deleteSaved(id) {
   setSaved(saved);
   if (id === activeSaved) setActiveSaved(null); else renderSlots();
   renderSaved();
+  let undone = false;
   toast(`"${gone.name}" dihapus`, {
     action: "Urungkan",
-    onAction: () => { const l = getSaved(); l.splice(i, 0, gone); setSaved(l); renderSaved(); renderSlots(); },
+    onAction: () => { undone = true; const l = getSaved(); l.splice(i, 0, gone); setSaved(l); renderSaved(); renderSlots(); },
   });
+  // give the undo toast a chance first, then drop cached audio no longer used by anything
+  setTimeout(() => { if (!undone) pruneCache(true); }, 5200);
 }
 
 function savedRow(s, i) {
@@ -1299,11 +1302,18 @@ async function prefetchAll() {
     await shareCached();
   } finally { prefetching = false; }
 }
-// drop downloads of songs that left the playlist; songs still in it are kept and reused.
-// fromEdit: the user changed the playlist here, so the app's copies go too (not on boot or
-// sync, where this page's list may still be stale)
+// drive ids worth keeping cached: the active list, plus every saved playlist (so switching
+// between saved playlists reuses what's already downloaded instead of fetching it again)
+function keepCachedIds() {
+  const ids = new Set(list.filter((x) => x.type === "drive").map((x) => x.id));
+  for (const s of getSaved()) for (const x of s.list) if (x.type === "drive") ids.add(x.id);
+  return ids;
+}
+// drop downloads of songs that left the playlist AND aren't in any saved playlist either;
+// songs still referenced anywhere are kept and reused. fromEdit: the user changed the playlist
+// here, so the app's copies go too (not on boot or sync, where this page's list may still be stale)
 async function pruneCache(fromEdit = false) {
-  const keep = new Set(list.filter((x) => x.type === "drive").map((x) => x.id));
+  const keep = keepCachedIds();
   if (fromEdit) pruneApp(keep);
   if (!hasCache) return;
   // forget levels of songs that left the playlist
