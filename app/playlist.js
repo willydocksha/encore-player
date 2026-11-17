@@ -221,12 +221,48 @@ function renameSaved(id, name) {
   renderSaved();
 }
 
-function moveSaved(id, d) {
-  const saved = getSaved(), i = saved.findIndex((x) => x.id === id), j = i + d;
-  if (i < 0 || j < 0 || j >= saved.length) return;
-  [saved[i], saved[j]] = [saved[j], saved[i]];
+// move one saved playlist to a new position (drag and drop)
+function moveSavedAt(from, to) {
+  const saved = getSaved();
+  if (from === to || to < 0 || to >= saved.length) return;
+  const [s] = saved.splice(from, 1);
+  saved.splice(to, 0, s);
   setSaved(saved);
   renderSaved();
+  renderSlots();
+}
+
+// drag a saved playlist row by its grip, same feel as the song queue
+function startSavedDrag(e, i, li) {
+  e.preventDefault();
+  e.stopPropagation();
+  const d = { from: i, to: i };
+  const clear = () => $$(".pl-saved-item").forEach((x) => x.classList.remove("drop-before", "drop-after"));
+  li.classList.add("dragging");
+  li.setPointerCapture(e.pointerId);
+  const move = (ev) => {
+    clear();
+    const target = document.elementFromPoint(ev.clientX, ev.clientY)?.closest(".pl-saved-item");
+    if (!target || target === li || target.dataset.i == null) { d.to = d.from; return; }
+    const j = +target.dataset.i;
+    const r = target.getBoundingClientRect();
+    const after = ev.clientY > r.top + r.height / 2;
+    target.classList.add(after ? "drop-after" : "drop-before");
+    let to = after ? j + 1 : j;
+    if (to > d.from) to--;
+    d.to = to;
+  };
+  const up = () => {
+    li.removeEventListener("pointermove", move);
+    li.removeEventListener("pointerup", up);
+    li.removeEventListener("pointercancel", up);
+    li.classList.remove("dragging");
+    clear();
+    moveSavedAt(d.from, d.to);
+  };
+  li.addEventListener("pointermove", move);
+  li.addEventListener("pointerup", up);
+  li.addEventListener("pointercancel", up);
 }
 
 function deleteSaved(id) {
@@ -247,6 +283,7 @@ function deleteSaved(id) {
 
 function savedRow(s, i) {
   const li = el("li", "pl-saved-item" + (s.id === activeSaved ? " on" : ""));
+  li.dataset.i = i;
   // name being edited: a text field in place of the row
   if (renamingSaved === s.id) {
     const inp = el("input", "pl-saved-rename");
@@ -260,6 +297,11 @@ function savedRow(s, i) {
     setTimeout(() => { inp.focus(); inp.select(); }, 0);
     return li;
   }
+  const grip = el("span", "pl-saved-grip");
+  grip.append(icon("grip"));
+  grip.title = "Geser untuk pindah urutan";
+  grip.addEventListener("pointerdown", (e) => startSavedDrag(e, i, li));
+  li.append(grip);
   const main = el("button", "pl-saved-main");
   main.type = "button";
   main.title = `Pakai playlist "${s.name}"`;
@@ -272,12 +314,9 @@ function savedRow(s, i) {
   more.type = "button"; more.title = "Lainnya"; more.append(icon("more"));
   more.onclick = (e) => {
     e.stopPropagation();
-    const n = getSaved().length;
     showMenu(more, [
       { label: "Ganti nama", onClick: () => { renamingSaved = s.id; renderSaved(); } },
       { label: "Timpa dengan playlist aktif", icon: "check", onClick: () => overwriteSaved(s.id) },
-      i > 0 && { label: "Naikkan", icon: "up", onClick: () => moveSaved(s.id, -1) },
-      i < n - 1 && { label: "Turunkan", icon: "down", onClick: () => moveSaved(s.id, 1) },
       { label: "Hapus", icon: "trash", danger: true, onClick: () => deleteSaved(s.id) },
     ]);
   };

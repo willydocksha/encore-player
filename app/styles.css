@@ -443,7 +443,7 @@ textarea {
   background: var(--surface-2); font: .85rem/1.55 var(--f-mono);
 }
 textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.preview { display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow: auto; }
+.preview { display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; overflow-x: hidden; }
 .preview:empty { display: none; }
 .preview-head { font-size: .8rem; color: var(--muted); margin-bottom: 2px; }
 .preview-item { display: flex; align-items: center; gap: 8px; font-size: .85rem; padding: 6px 10px; border-radius: 8px; background: var(--surface-2); }
@@ -1078,7 +1078,7 @@ div.sheet:not([hidden]) { flex: 1; min-height: 300px; display: flex; flex-direct
 
 /* ------------------------------------------------------------------ click + export dialog */
 .dock .click-vol { width: 64px; }
-.export-opts { display: flex; flex-direction: column; gap: 12px; max-height: 50vh; overflow-y: auto; }
+.export-opts { display: flex; flex-direction: column; gap: 12px; max-height: 50vh; overflow-y: auto; overflow-x: hidden; }
 .export-group h3 { font-size: .74rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 6px; }
 .export-group .rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .export-group:first-child:has(.check-row:only-child) .rows { grid-template-columns: 1fr; }
@@ -1182,9 +1182,20 @@ div.sheet:not([hidden]) { flex: 1; min-height: 300px; display: flex; flex-direct
 .metro-song-add input:focus { outline: none; border-color: var(--metro); }
 
 /* saved playlists: same list/rename/add pattern as metro-song above, playlist accent color */
-.pl-saved-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 50vh; overflow: auto; }
+.pl-saved-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 50vh; overflow-y: auto; overflow-x: hidden; }
+/* thin, theme-colored scrollbar for every scrollable list/panel (replaces the browser's default bar) */
+.preview, .export-opts, .pl-saved-list { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.preview::-webkit-scrollbar, .export-opts::-webkit-scrollbar, .pl-saved-list::-webkit-scrollbar { width: 6px; }
+.preview::-webkit-scrollbar-track, .export-opts::-webkit-scrollbar-track, .pl-saved-list::-webkit-scrollbar-track { background: transparent; }
+.preview::-webkit-scrollbar-thumb, .export-opts::-webkit-scrollbar-thumb, .pl-saved-list::-webkit-scrollbar-thumb { background: var(--line); border-radius: 99px; }
 .pl-saved-item { display: flex; align-items: center; gap: 6px; border-radius: 10px; padding-right: 4px; border: 1px solid transparent; }
 .pl-saved-item.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.pl-saved-item.dragging { opacity: .4; }
+.pl-saved-item.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.pl-saved-item.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
+.pl-saved-grip { flex: none; width: 22px; align-self: stretch; margin-left: 2px; color: var(--muted); opacity: .5; cursor: grab; display: grid; place-items: center; touch-action: none; }
+.pl-saved-grip svg { width: 16px; height: 16px; }
+.pl-saved-item:hover .pl-saved-grip { opacity: .9; }
 .pl-saved-main {
   flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 8px 8px; border: 0; background: none;
   color: var(--ink); font: inherit; text-align: left; cursor: pointer; border-radius: 10px;
