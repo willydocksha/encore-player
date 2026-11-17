@@ -221,6 +221,30 @@ function renameSaved(id, name) {
   renderSaved();
 }
 
+// press on a row and move past a few pixels to start dragging it; a plain click still just clicks.
+// touch keeps to the grip (a finger drag on the row has to scroll the list)
+function armDrag(e, start) {
+  if (e.pointerType === "touch" || e.button !== 0 || e.target.closest(".icon-btn, a, input")) return;
+  const x = e.clientX, y = e.clientY;
+  const stop = () => { removeEventListener("pointermove", check, true); removeEventListener("pointerup", stop, true); removeEventListener("pointercancel", stop, true); };
+  const check = (ev) => {
+    if (Math.hypot(ev.clientX - x, ev.clientY - y) < 5) return;
+    stop();
+    start(ev);
+  };
+  addEventListener("pointermove", check, true);
+  addEventListener("pointerup", stop, true);
+  addEventListener("pointercancel", stop, true);
+}
+
+// swallow the click that follows a drag so it doesn't also select a row (the list re-renders,
+// so the click can land on a new row: catch it on the window instead)
+function eatNextClick() {
+  const eat = (ev) => { ev.stopImmediatePropagation(); ev.preventDefault(); };
+  addEventListener("click", eat, { capture: true, once: true });
+  setTimeout(() => removeEventListener("click", eat, true), 0);
+}
+
 // move one saved playlist to a new position (drag and drop)
 function moveSavedAt(from, to) {
   const saved = getSaved();
@@ -258,6 +282,7 @@ function startSavedDrag(e, i, li) {
     li.removeEventListener("pointercancel", up);
     li.classList.remove("dragging");
     clear();
+    eatNextClick();
     moveSavedAt(d.from, d.to);
   };
   li.addEventListener("pointermove", move);
@@ -299,8 +324,8 @@ function savedRow(s, i) {
   }
   const grip = el("span", "pl-saved-grip");
   grip.append(icon("grip"));
-  grip.title = "Geser untuk pindah urutan";
   grip.addEventListener("pointerdown", (e) => startSavedDrag(e, i, li));
+  li.addEventListener("pointerdown", (e) => armDrag(e, (ev) => startSavedDrag(ev, i, li)));
   li.append(grip);
   const main = el("button", "pl-saved-main");
   main.type = "button";
@@ -488,8 +513,8 @@ function renderQueue() {
     li.title = it.url;
     const grip = el("span", "q-grip");
     grip.append(icon("grip"));
-    grip.title = "Geser untuk pindah urutan";
     grip.addEventListener("pointerdown", (e) => startDrag(e, i, li));
+    li.addEventListener("pointerdown", (e) => armDrag(e, (ev) => startDrag(ev, i, li)));
     const num = el("span", "q-num");
     if (i === idx && playing) num.append(eqIcon()); else num.textContent = i + 1;
     const body = el("div", "q-body");
@@ -570,6 +595,7 @@ function startDrag(e, i, li) {
     $$(".q-item").forEach((x) => x.classList.remove("drop-before", "drop-after"));
     const { from, to } = drag;
     drag = null;
+    eatNextClick();
     if (from !== to) moveItem(from, to);
   };
   li.addEventListener("pointermove", move);
