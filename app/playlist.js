@@ -141,6 +141,123 @@ function setName(n) {
   $("#plName").textContent = n || "Playlist";
 }
 
+// ------------------------------------------------------------------ saved playlists (several daftar lagu, switch without losing the others)
+const savedDlg = $("#plSaved");
+let renamingSaved = null;
+
+const getSaved = () => store.get("lp-playlists", []);
+const setSaved = (arr) => store.set("lp-playlists", arr);
+
+$("#plSavedBtn").onclick = () => { renamingSaved = null; renderSaved(); savedDlg.showModal(); };
+
+function saveCurrentAsPlaylist(name) {
+  if (!list.length) { toast("Playlist aktif masih kosong"); return; }
+  const saved = getSaved();
+  const nm = name.trim() || store.get("lp-name", null) || `Playlist ${saved.length + 1}`;
+  saved.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: nm, list: list.map((x) => ({ ...x })) });
+  setSaved(saved);
+  renderSaved();
+  toast(`"${nm}" disimpan`, { ms: 2000 });
+}
+function submitSaveCurrent() {
+  saveCurrentAsPlaylist($("#plSavedName").value);
+  $("#plSavedName").value = "";
+}
+$("#plSavedSave").onclick = submitSaveCurrent;
+$("#plSavedName").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); submitSaveCurrent(); } };
+
+async function loadSavedPlaylist(id) {
+  const s = getSaved().find((x) => x.id === id);
+  if (!s) return;
+  if (list.length && !(await confirmDialog("Ganti ke playlist ini?", `${list.length} lagu sekarang akan diganti dengan "${s.name}" (${s.list.length} lagu).`, { ok: "Ganti", danger: true }))) return;
+  savedDlg.close();
+  stop(); list = s.list.map((x) => ({ ...x })); idx = -1; cur = null; history = []; played = new Set();
+  setName(s.name);
+  save(); renderQueue(); list.forEach(fetchTitle);
+  toast(`"${s.name}" dimuat, ${list.length} lagu`);
+  playIndex(0, false);
+  pruneCache(true); prefetchAll();
+}
+
+function overwriteSaved(id) {
+  const saved = getSaved(), i = saved.findIndex((x) => x.id === id);
+  if (i < 0) return;
+  saved[i] = { ...saved[i], list: list.map((x) => ({ ...x })) };
+  setSaved(saved);
+  toast(`"${saved[i].name}" diperbarui`, { ms: 2000 });
+}
+
+function renameSaved(id, name) {
+  if (name.trim()) setSaved(getSaved().map((x) => (x.id === id ? { ...x, name: name.trim() } : x)));
+  renderSaved();
+}
+
+function moveSaved(id, d) {
+  const saved = getSaved(), i = saved.findIndex((x) => x.id === id), j = i + d;
+  if (i < 0 || j < 0 || j >= saved.length) return;
+  [saved[i], saved[j]] = [saved[j], saved[i]];
+  setSaved(saved);
+  renderSaved();
+}
+
+function deleteSaved(id) {
+  const saved = getSaved(), i = saved.findIndex((x) => x.id === id);
+  if (i < 0) return;
+  const [gone] = saved.splice(i, 1);
+  setSaved(saved);
+  renderSaved();
+  toast(`"${gone.name}" dihapus`, {
+    action: "Urungkan",
+    onAction: () => { const l = getSaved(); l.splice(i, 0, gone); setSaved(l); renderSaved(); },
+  });
+}
+
+function savedRow(s, i) {
+  const li = el("li", "pl-saved-item");
+  // name being edited: a text field in place of the row
+  if (renamingSaved === s.id) {
+    const inp = el("input", "pl-saved-rename");
+    inp.value = s.name; inp.maxLength = 60;
+    inp.setAttribute("aria-label", "Nama playlist");
+    let done = false;
+    const finish = (doSave) => { if (done) return; done = true; renamingSaved = null; if (doSave) renameSaved(s.id, inp.value); else renderSaved(); };
+    inp.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); finish(true); } else if (e.key === "Escape") { e.preventDefault(); finish(false); } };
+    inp.onblur = () => finish(true);
+    li.append(el("span", "pl-saved-n", String(i + 1)), inp);
+    setTimeout(() => { inp.focus(); inp.select(); }, 0);
+    return li;
+  }
+  const main = el("button", "pl-saved-main");
+  main.type = "button";
+  main.title = `Pakai playlist "${s.name}"`;
+  const text = el("span", "pl-saved-text");
+  text.append(el("span", "pl-saved-name", s.name), el("span", "pl-saved-meta", `${s.list.length} lagu`));
+  main.append(el("span", "pl-saved-n", String(i + 1)), text);
+  main.onclick = () => loadSavedPlaylist(s.id);
+  li.append(main);
+  const more = el("button", "icon-btn");
+  more.type = "button"; more.title = "Lainnya"; more.append(icon("more"));
+  more.onclick = (e) => {
+    e.stopPropagation();
+    const n = getSaved().length;
+    showMenu(more, [
+      { label: "Ganti nama", onClick: () => { renamingSaved = s.id; renderSaved(); } },
+      { label: "Timpa dengan playlist aktif", icon: "check", onClick: () => overwriteSaved(s.id) },
+      i > 0 && { label: "Naikkan", icon: "up", onClick: () => moveSaved(s.id, -1) },
+      i < n - 1 && { label: "Turunkan", icon: "down", onClick: () => moveSaved(s.id, 1) },
+      { label: "Hapus", icon: "trash", danger: true, onClick: () => deleteSaved(s.id) },
+    ]);
+  };
+  li.append(more);
+  return li;
+}
+
+function renderSaved() {
+  const saved = getSaved();
+  $("#plSavedList").replaceChildren(...saved.map(savedRow));
+  $("#plSavedEmpty").hidden = saved.length > 0;
+}
+
 // ------------------------------------------------------------------ copy playlist to a phone (qr, one-shot)
 
 let plQrFor = "";
@@ -1209,6 +1326,7 @@ onRemote((keys) => {
   }
   list.forEach(fetchTitle);
   renderQueue();
+  if (savedDlg.open) renderSaved();
 });
 
 // ------------------------------------------------------------------ boot

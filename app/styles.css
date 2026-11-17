@@ -1166,6 +1166,29 @@ div.sheet:not([hidden]) { flex: 1; min-height: 300px; display: flex; flex-direct
   background: var(--surface-2); color: var(--ink); font: inherit;
 }
 .metro-song-add input:focus { outline: none; border-color: var(--metro); }
+
+/* saved playlists: same list/rename/add pattern as metro-song above, playlist accent color */
+.pl-saved-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 50vh; overflow: auto; }
+.pl-saved-item { display: flex; align-items: center; gap: 6px; border-radius: 10px; padding-right: 4px; }
+.pl-saved-main {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 8px 8px; border: 0; background: none;
+  color: var(--ink); font: inherit; text-align: left; cursor: pointer; border-radius: 10px;
+}
+.pl-saved-main:hover { background: var(--surface-2); }
+.pl-saved-n { width: 20px; flex: none; text-align: right; font: 600 .8rem var(--f-mono); color: var(--muted); }
+.pl-saved-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.pl-saved-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.pl-saved-meta { flex: none; font: .72rem var(--f-mono); color: var(--muted); }
+.pl-saved-rename {
+  flex: 1; min-width: 0; margin: 4px 0; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--accent);
+  background: var(--surface-2); color: var(--ink); font: inherit;
+}
+.pl-saved-add { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.pl-saved-add input {
+  flex: 1; min-width: 0; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--surface-2); color: var(--ink); font: inherit;
+}
+.pl-saved-add input:focus { outline: none; border-color: var(--accent); }
 .metro-song-add .btn { flex: none; }
 .metro-opts { padding: 8px 18px; }
 .metro-row { display: flex; align-items: center; gap: 14px; padding: 10px 0; flex-wrap: wrap; }

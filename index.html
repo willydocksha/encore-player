@@ -116,6 +116,7 @@
           <p class="eyebrow">Playlist latihan</p>
           <h1 id="plName">Playlist</h1>
         </div>
+        <button class="btn ghost sm" type="button" id="plSavedBtn" title="Simpan playlist ini, atau ganti ke playlist tersimpan lainnya"><svg><use href="#i-list"/></svg>Playlist tersimpan</button>
       </header>
 
       <div class="pl-grid">
@@ -657,6 +658,25 @@ https://youtu.be/…"></textarea>
       <div class="sync-code-row"><span class="ear-small">Kode</span><b id="plShareCode" class="sync-code"></b></div>
       <button class="link-btn sync-link" type="button" id="plShareCopy" title="Salin link"><span id="plShareLink"></span></button>
       <p class="ear-small" id="plShareStatus"></p>
+    </div>
+    <footer class="sheet-foot">
+      <button class="btn" value="cancel">Tutup</button>
+    </footer>
+  </form>
+</dialog>
+
+<!-- several saved playlists (e.g. one per practice session); switch between them without losing the others -->
+<dialog class="sheet small" id="plSaved">
+  <form method="dialog" class="sheet-inner">
+    <header class="sheet-head">
+      <h2>Playlist tersimpan</h2>
+      <button class="icon-btn" value="cancel" aria-label="Tutup"><svg><use href="#i-x"/></svg></button>
+    </header>
+    <ol class="pl-saved-list" id="plSavedList"></ol>
+    <p class="ear-small" id="plSavedEmpty">Belum ada. Simpan playlist yang sedang aktif di bawah, lalu ganti-ganti kapan saja tanpa kehilangan yang lain.</p>
+    <div class="pl-saved-add" id="plSavedAdd">
+      <input id="plSavedName" type="text" maxlength="60" autocomplete="off" placeholder="Nama playlist, mis. Latihan Minggu" aria-label="Nama playlist">
+      <button class="btn primary" type="button" id="plSavedSave"><svg><use href="#i-plus"/></svg>Simpan playlist aktif</button>
     </div>
     <footer class="sheet-foot">
       <button class="btn" value="cancel">Tutup</button>

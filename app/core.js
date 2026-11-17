@@ -24,7 +24,7 @@ export function setIcon(button, name) {
 }
 
 // settings shared between the online site and the encore app (sync.js); the rest stays per page
-export const SYNC_KEYS = ["lp-playlist", "lp-index", "lp-name", "lp-repeat", "lp-shuffle", "lp-autonext", "lp-rate",
+export const SYNC_KEYS = ["lp-playlist", "lp-index", "lp-name", "lp-repeat", "lp-shuffle", "lp-autonext", "lp-rate", "lp-playlists",
   "bass-mixer", "bass-part", "bd-mode", "nav-folded", "tour-done", "tour-seen", "pitch-progress", "pitch-level", "metro-songs"];
 
 export const store = {
@@ -181,7 +181,9 @@ export function showMenu(anchor, items) {
     b.addEventListener("click", (e) => { e.stopPropagation(); closeMenu(); it.onClick?.(); });
     m.append(b);
   }
-  document.body.append(m);
+  // a <dialog> paints in the browser's top layer, above anything else appended to body,
+  // so a menu opened from inside one must live in that same dialog to be visible/clickable
+  (anchor.closest("dialog") || document.body).append(m);
   const r = anchor.getBoundingClientRect();
   const w = m.offsetWidth, h = m.offsetHeight;
   m.style.left = `${Math.max(8, Math.min(window.innerWidth - w - 8, r.right - w))}px`;
