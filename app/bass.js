@@ -663,6 +663,11 @@ const player = (() => {
     });
     $("#exportOpts").replaceChildren(...groups);
     $("#exportClick").checked = !!store.get("bass-export-click", false);
+    // cutting needs a marked A-B range; it is offered unchecked each time
+    const hasRange = loop.a != null && loop.b != null && loop.b > loop.a;
+    $("#exportRangeRow").hidden = !hasRange;
+    $("#exportRange").checked = hasRange;
+    if (hasRange) $("#exportRangeLabel").textContent = `Hanya bagian loop (${fmtTime(loop.a)} – ${fmtTime(loop.b)})`;
     $("#exportPitchRow").hidden = !pitch;
     $("#exportPitch").checked = true;
     $("#exportPitchLabel").textContent = `Ikut nada sekarang (${fmtSemis(pitch)})`;
@@ -684,12 +689,13 @@ const player = (() => {
       exportMany(opts.filter((o) => keys.includes(o.key)), {
         withClick: $("#exportClick").checked,
         semis: pitch && $("#exportPitch").checked ? pitch : 0,
+        range: hasRange && $("#exportRange").checked ? { a: loop.a, b: loop.b } : null,
       });
     }, { once: true });
   }
 
   // decode each stem once, then render + encode + download every chosen version in turn
-  async function exportMany(chosen, { withClick = false, semis = 0 } = {}) {
+  async function exportMany(chosen, { withClick = false, semis = 0, range = null } = {}) {
     if (exporting || !chosen.length) return;
     exporting = true;
     const done = toast("", { ms: 3600000 });
@@ -710,9 +716,10 @@ const player = (() => {
       for (const [i, o] of chosen.entries()) {
         say(chosen.length > 1 ? `Export ${i + 1} dari ${chosen.length}: ${o.label}…` : `Export ${o.label}…`);
         const bufs = await Promise.all(o.list.map(async (t) => ({ buf: await buffer(t.name), vol: t.vol })));
-        const out = await renderMix(bufs, SR, { semis, click: withClick ? { beats, accents, vol: click.vol } : null });
+        const out = await renderMix(bufs, SR, { semis, range, click: withClick ? { beats, accents, vol: click.vol } : null });
         const bytes = await encode(out, SR);
-        const suffix = [o.suffix, semis ? `nada ${fmtSemis(semis)}` : "", withClick ? "click" : ""].filter(Boolean).join(", ");
+        const cut = range ? `potongan ${fmtTime(range.a)}-${fmtTime(range.b)}`.replace(/:/g, ".") : "";
+        const suffix = [o.suffix, semis ? `nada ${fmtSemis(semis)}` : "", withClick ? "click" : "", cut].filter(Boolean).join(", ");
         download(bytes, `${safeName(title)} - ${suffix}.mp3`);
         made++;
         // browsers drop downloads that fire in the same instant
@@ -729,8 +736,11 @@ const player = (() => {
   }
 
   // mix the stems offline; pitch goes through the same shifter as playback, click is added after it
-  async function renderMix(bufs, SR, { semis = 0, click: clk = null } = {}) {
-    const len = Math.max(...bufs.map((b) => b.buf.length));
+  async function renderMix(bufs, SR, { semis = 0, range = null, click: clk = null } = {}) {
+    const full = Math.max(...bufs.map((b) => b.buf.length));
+    // a cut keeps only [a, b): sources start at a, click beats shift back by a
+    const from = range ? Math.min(full, Math.floor(range.a * SR)) : 0;
+    const len = range ? Math.max(1, Math.min(full, Math.ceil(range.b * SR)) - from) : full;
     const pad = semis ? PITCH_LATENCY : 0; // shifter delay, cut off again below
     const ctx = new OfflineAudioContext(2, len + pad, SR);
     let dest = ctx.destination;
@@ -744,9 +754,10 @@ const player = (() => {
       const src = ctx.createBufferSource(), g = ctx.createGain();
       src.buffer = buf; g.gain.value = vol;
       src.connect(g).connect(dest);
-      src.start();
+      src.start(0, from / SR);
     }
-    if (clk) clk.beats.forEach((b, i) => { if (b * SR < len) clickSound(ctx, b + pad / SR, clk.accents[i] > 0, clk.vol); });
+    const t0 = from / SR;
+    if (clk) clk.beats.forEach((b, i) => { if (b >= t0 && (b - t0) * SR < len) clickSound(ctx, b - t0 + pad / SR, clk.accents[i] > 0, clk.vol); });
     const out = await ctx.startRendering();
     return [out.getChannelData(0).slice(pad, pad + len), out.getChannelData(1).slice(pad, pad + len)];
   }
