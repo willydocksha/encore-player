@@ -366,6 +366,8 @@ select { background: var(--surface-2); border: 1px solid var(--line); border-rad
 /* instant tooltip (replaces native title=, see core.js tipify): opens below the element.
    positioning context is a separate class so it's only added where the element needs it */
 .has-tip-anchor { position: relative; }
+/* lift the hovered anchor above later siblings: its tooltip can be trapped in its own stacking context (e.g. filter on hover) */
+.has-tip-anchor:hover, .has-tip-anchor:focus-visible { z-index: 20; }
 [data-tip]::after {
   content: attr(data-tip); position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%);
   width: max-content; max-width: 220px; padding: 6px 9px; border-radius: 8px; z-index: 20;
