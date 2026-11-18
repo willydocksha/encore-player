@@ -122,12 +122,19 @@ function addLinks(replace) {
 }
 
 // add from another section (bass -> playlist)
-export function addToPlaylist(url, title) {
+// clip = {start, end} in seconds: the same link, but only that part plays
+export function addToPlaylist(url, title, clip = null) {
   const p = parseLink(url);
   if (!p) return false;
-  const exists = list.findIndex((x) => x.type === p.type && x.id === p.id);
-  if (exists >= 0) { toast("Lagu ini sudah ada di playlist", { action: "Putar", onAction: () => { location.hash = "#/"; playIndex(exists, true); } }); return true; }
+  // a clip only counts as a duplicate of the same range; a full song only of another full song
+  const exists = list.findIndex((x) => x.type === p.type && x.id === p.id && (x.end || 0) === (clip?.end || 0) && (!clip || (x.start || 0) === clip.start));
+  if (exists >= 0) { toast(clip ? "Potongan ini sudah ada di playlist" : "Lagu ini sudah ada di playlist", { action: "Putar", onAction: () => { location.hash = "#/"; playIndex(exists, true); } }); return true; }
   const item = { url, ...p, title: title || null, note: null };
+  if (clip) {
+    item.start = Math.floor(clip.start);
+    item.end = Math.ceil(clip.end);
+    item.title = `${title || "Lagu"} · ${fmtTime(item.start)}–${fmtTime(item.end)}`;
+  }
   list.push(item);
   save(); renderQueue(); fetchTitle(item);
   toast("Ditambahkan ke Playlist", { action: "Putar", onAction: () => { location.hash = "#/"; playIndex(list.length - 1, true); } });
@@ -662,6 +669,7 @@ export function playIndex(i, autoplay = true) {
   const it = list[i];
   cur = it;
   showMsg("");
+  clipDone = false;
   A = B = null; updateAB();
   $("#srcBadge").textContent = it.type === "yt" ? "YouTube" : "Drive";
   $("#title").textContent = it.title || "Memuat…";
@@ -682,6 +690,8 @@ export function playIndex(i, autoplay = true) {
       if (tok !== loadTok) return;
       $("#note").textContent = offline ? "Audio Google Drive · tersimpan offline" : "Audio Google Drive";
       audio.src = src;
+      // a clip starts at its own start time (youtube takes it as a player option instead)
+      if (it.start) audio.addEventListener("loadedmetadata", () => { audio.currentTime = it.start; }, { once: true });
       audio.preservesPitch = true;
       audio.playbackRate = rate; audio.defaultPlaybackRate = rate;
       audio.volume = vol() / 100;
@@ -752,7 +762,7 @@ audio.onpause = renderQueue;
 audio.onended = onEnded;
 
 function onEnded() {
-  if (repeat === "one") { P.seek(0); P.play(); return; }
+  if (repeat === "one") { P.seek(cur?.start || 0); P.play(); return; }
   // repeat all keeps the playlist going even when auto next is off
   if (autonext || repeat === "all") nextTrack(true);
 }
@@ -781,7 +791,7 @@ function nextTrack(auto = false) {
 }
 function prevTrack() {
   if (!list.length) return;
-  if (P.time() > 3) { P.seek(0); return; } // first press restarts the song
+  if (P.time() > (cur?.start || 0) + 3) { P.seek(cur?.start || 0); return; } // first press restarts the song
   const j = shuffle && history.length ? history.pop() : idx > 0 ? idx - 1 : repeat === "all" ? list.length - 1 : 0;
   const h = history.length;
   playIndex(j, true);
@@ -789,7 +799,7 @@ function prevTrack() {
 }
 function stop() {
   P.pause();
-  if (cur) P.seek(0);
+  if (cur) P.seek(cur.start || 0);
   if (cur?.type === "yt" && ytReady) yt.stopVideo();
   A = B = null; updateAB(); renderQueue(); render();
 }
@@ -1236,8 +1246,19 @@ function render(pOverride) {
     updateMediaSession();
   }
 }
+// a clip ends at its own end time, like the song ending; clipDone stops it firing again until the playhead is back inside
+let clipDone = false;
+function checkClipEnd() {
+  if (!cur?.end || !isPlaying()) return;
+  if (P.time() < cur.end) { clipDone = false; return; }
+  if (clipDone) return;
+  clipDone = true;
+  if (repeat === "one" || autonext || repeat === "all") onEnded();
+  else { P.pause(); P.seek(cur.start || 0); }
+}
 setInterval(() => {
   if (!cur) return;
+  checkClipEnd();
   if (A != null && B != null && P.time() >= B) P.seek(A);
   if (!dragging) render();
 }, 150);

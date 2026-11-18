@@ -2029,6 +2029,13 @@ const player = (() => {
     $("#loopB").textContent = loop.b != null ? `B ${fmtTime(loop.b)}` : "B";
     $("#loopToggle").textContent = loop.on ? "On" : "Off";
     $("#loopToggle").classList.toggle("on", loop.on);
+    // only songs from a link can go to the playlist, and only once A and B are both set
+    $("#loopClip").hidden = !(song?.url && loop.a != null && loop.b != null);
+  }
+  function clipToPlaylist() {
+    if (!song?.url || loop.a == null || loop.b == null) return;
+    stop();
+    addToPlaylist(song.url, song.title, { start: loop.a, end: loop.b });
   }
   function setA() { loop.a = now(); if (loop.b != null && loop.b <= loop.a) loop.b = null; syncLoopUi(); }
   function setB() { const t = now(); if (loop.a == null || t <= loop.a) return; loop.b = t; loop.on = true; syncLoopUi(); }
@@ -2094,6 +2101,7 @@ const player = (() => {
   $("#loopB").addEventListener("click", setB);
   $("#loopToggle").addEventListener("click", toggleLoop);
   $("#loopClear").addEventListener("click", clearLoop);
+  $("#loopClip").addEventListener("click", clipToPlaylist);
   $("#zoom").addEventListener("input", (e) => { windowSec = +e.target.value; });
   $("#tuningSel").addEventListener("change", (e) => {
     tuning = TUNINGS[e.target.value];
