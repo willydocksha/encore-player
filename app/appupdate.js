@@ -2,9 +2,18 @@
 // the ui updates itself (uiupdate.js), but the app itself needs a new download.
 
 import { $, router } from "./core.js";
+import { APP_RELEASES, APP_FILES } from "./config.js";
 
 const DISMISSED = "app-update-dismissed";
 const POPPED = "app-update-popped";
+
+// direct file link for this computer: the backend's answer when it has one, else built here (older apps)
+function downloadUrl(info) {
+  if (info.download) return info.download;
+  const p = (navigator.userAgentData?.platform || navigator.platform || "").toLowerCase();
+  const os = p.includes("win") ? "windows" : p.includes("mac") ? "mac" : "linux";
+  return `${APP_RELEASES.replace(/\/latest$/, "")}/download/app-v${info.latest}/${APP_FILES[os].file}`;
+}
 
 // the dismissed version stays on this device only (not synced to the online site)
 function dismissed() {
@@ -41,7 +50,7 @@ function showPopup(info) {
   }
   dlg.querySelector("[data-rel]").href = info.url;
   const dl = dlg.querySelector("[data-dl]");
-  dl.href = info.download || info.url;
+  dl.href = downloadUrl(info);
   dl.onclick = () => dlg.close();
   dlg.addEventListener("close", () => dlg.remove());
   document.body.append(dlg);
@@ -82,7 +91,7 @@ export async function checkAppUpdate() {
   bar.querySelector("b").textContent = `Encore App ${info.latest} tersedia`;
   bar.querySelector("small").textContent = `Kamu masih pakai versi ${info.current}. Download versi baru lalu pasang ulang app-nya.`;
   bar.querySelector("[data-rel]").href = info.url;
-  bar.querySelector("[data-dl]").href = info.download || info.url;
+  bar.querySelector("[data-dl]").href = downloadUrl(info);
   bar.querySelector("button").onclick = () => { dismiss(info.latest); bar.remove(); };
   $(".main").prepend(bar);
   popupWhenBreakdown(info);
