@@ -793,7 +793,9 @@ def ui_update():
 
 APP_CHECK_TTL = 6 * 3600
 APP_RELEASES_API = RELEASES.replace("https://github.com/", "https://api.github.com/repos/")
-app_check_cache: dict = {"at": 0.0, "latest": None, "url": None}
+app_check_cache: dict = {"at": 0.0, "latest": None, "url": None, "notes": ""}
+# the file for this computer in a release
+APP_FILE = {"darwin": "Encore-macOS.dmg", "win32": "Encore-Windows.zip"}.get(sys.platform, "Encore-Linux.tar.gz")
 
 
 def version_tuple(v: str) -> tuple[int, ...]:
@@ -801,18 +803,24 @@ def version_tuple(v: str) -> tuple[int, ...]:
     return tuple(int(p) if p.isdigit() else 0 for p in v.split("."))
 
 
-def latest_release() -> tuple[str | None, str | None]:
-    """newest published app-v* release on github as (version, page url)."""
+def release_notes(body) -> str:
+    """the "## Yang baru" section of a release body (empty when the release has none)."""
+    m = re.search(r"^##\s+Yang baru\s*\n(.*?)(?=^##\s|\Z)", str(body or ""), re.S | re.M)
+    return m.group(1).strip()[:1500] if m else ""
+
+
+def latest_release() -> tuple[str | None, str | None, str]:
+    """newest published app-v* release on github as (version, page url, release notes)."""
     req = urllib.request.Request(f"{APP_RELEASES_API}?per_page=20",
                                  headers={"User-Agent": "Encore", "Accept": "application/vnd.github+json"})
     with urllib.request.urlopen(req, timeout=8) as r:
         releases = json.loads(r.read())
     # newest version wins, not the newest date
-    found = [(r["tag_name"][len("app-v"):], r.get("html_url")) for r in releases
+    found = [(r["tag_name"][len("app-v"):], r.get("html_url"), release_notes(r.get("body"))) for r in releases
              if isinstance(r, dict) and str(r.get("tag_name", "")).startswith("app-v")
              and not r.get("draft") and not r.get("prerelease")]
     if not found:
-        return None, None
+        return None, None, ""
     return max(found, key=lambda f: version_tuple(f[0]))
 
 
@@ -821,14 +829,17 @@ def app_check():
     # refresh the cache when stale; offline keeps the last answer (or none) without an error
     if time.time() - app_check_cache["at"] > APP_CHECK_TTL:
         try:
-            latest, url = latest_release()
-            app_check_cache.update(at=time.time(), latest=latest, url=url)
+            latest, url, notes = latest_release()
+            app_check_cache.update(at=time.time(), latest=latest, url=url, notes=notes)
         except (OSError, ValueError, KeyError, TypeError):
             pass
     latest = app_check_cache["latest"]
     return {"current": APP_VERSION, "latest": latest,
             "available": bool(latest) and version_tuple(latest) > version_tuple(APP_VERSION),
-            "url": app_check_cache["url"] or f"{RELEASES}/latest"}
+            "url": app_check_cache["url"] or f"{RELEASES}/latest",
+            # direct download of this computer's build + the release notes (may be empty)
+            "download": f"{RELEASES}/download/app-v{latest}/{APP_FILE}" if latest else None,
+            "notes": app_check_cache["notes"]}
 
 
 # ---------------------------------------------------------------- web app

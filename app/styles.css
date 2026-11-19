@@ -1073,6 +1073,10 @@ div.sheet:not([hidden]) { flex: 1; min-height: 300px; display: flex; flex-direct
 .app-update-text small { color: var(--muted); font-size: .8rem; }
 .app-update .btn { flex: none; min-height: 32px; padding: 4px 14px; text-decoration: none; }
 .app-update .icon-btn { flex: none; }
+.app-update-sub { margin: 0; color: var(--ink-2); }
+.app-update-notes { padding: 10px 14px; border-radius: 12px; background: var(--accent-soft); font-size: .9rem; }
+.app-update-notes ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.app-update-dialog .btn { text-decoration: none; }
 @media (max-width: 640px) {
   .app-update { flex-wrap: wrap; }
   .app-update-text { flex-basis: calc(100% - 80px); }
