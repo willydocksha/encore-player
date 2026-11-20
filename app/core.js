@@ -372,3 +372,49 @@ new MutationObserver((muts) => {
     }
   }
 }).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ["title"] });
+
+// the bubble itself is one element on the page, positioned from the hovered element's box: a bubble
+// drawn inside the element would be cut off by scroll boxes (the playlist) and add scrollable space
+const bubble = document.createElement("div");
+bubble.className = "tip-bubble";
+bubble.setAttribute("role", "tooltip");
+// a popover lives in the top layer, so the bubble also shows above open dialogs
+bubble.popover = "manual";
+document.body.append(bubble);
+let tipFor = null;
+
+function hideTip() {
+  tipFor = null;
+  bubble.classList.remove("on");
+  try { bubble.hidePopover(); } catch { /* not open, or no popover support */ }
+}
+function showTip(el) {
+  tipFor = el;
+  bubble.textContent = el.dataset.tip;
+  bubble.classList.add("on");
+  try { if (!bubble.matches(":popover-open")) bubble.showPopover(); } catch { /* no popover support: z-index is enough */ }
+  // below the element by default, above it when there is no room; kept inside the window sideways
+  const r = el.getBoundingClientRect();
+  const b = bubble.getBoundingClientRect();
+  const gap = 6;
+  const below = r.bottom + gap + b.height <= innerHeight - 4;
+  const top = below ? r.bottom + gap : Math.max(4, r.top - gap - b.height);
+  const left = Math.min(Math.max(4, r.left + r.width / 2 - b.width / 2), innerWidth - b.width - 4);
+  bubble.style.top = `${top}px`;
+  bubble.style.left = `${left}px`;
+}
+document.addEventListener("pointerover", (e) => {
+  if (e.pointerType === "touch") return;
+  const el = e.target.closest?.("[data-tip]");
+  if (el === tipFor) return;
+  if (el) showTip(el); else hideTip();
+});
+document.addEventListener("focusin", (e) => {
+  const el = e.target.closest?.("[data-tip]");
+  if (el && el.matches(":focus-visible")) showTip(el);
+});
+document.addEventListener("focusout", hideTip);
+document.addEventListener("pointerdown", hideTip, true);
+document.addEventListener("scroll", hideTip, true);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") hideTip(); });
+document.addEventListener("pointerleave", hideTip);

@@ -368,16 +368,16 @@ select { background: var(--surface-2); border: 1px solid var(--line); border-rad
 .has-tip-anchor { position: relative; }
 /* lift the hovered anchor above later siblings: its tooltip can be trapped in its own stacking context (e.g. filter on hover) */
 .has-tip-anchor:hover, .has-tip-anchor:focus-visible { z-index: 20; }
-[data-tip]::after {
-  content: attr(data-tip); position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%);
-  width: max-content; max-width: 220px; padding: 6px 9px; border-radius: 8px; z-index: 20;
-  background: var(--surface-2); border: 1px solid var(--line); box-shadow: 0 6px 18px rgba(0,0,0,.35);
+.tip-bubble {
+  position: fixed; inset: auto; top: 0; left: 0; margin: 0; overflow: visible; z-index: 3000; width: max-content; max-width: min(260px, calc(100vw - 8px));
+  padding: 6px 9px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--line);
+  box-shadow: 0 6px 18px rgba(0,0,0,.35);
   font: 500 .74rem/1.4 var(--f-body); color: var(--ink); text-align: left; white-space: normal;
-  /* not rendered until shown: a hidden bubble below the last row of a scroll box (the playlist) still
-     counted as scrollable space and showed up as an empty extra row */
+  /* long links have no spaces: break them inside the box instead of running out of it */
+  overflow-wrap: anywhere;
   display: none; pointer-events: none;
 }
-[data-tip]:hover::after, [data-tip]:focus-visible::after { display: block; animation: tip-in .12s; }
+.tip-bubble.on { display: block; animation: tip-in .12s; }
 @keyframes tip-in { from { opacity: 0; } }
 .queue-sub { margin: 2px 0 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .link-btn { border: 0; background: none; padding: 0; font: .76rem var(--f-body); color: var(--accent); cursor: pointer; text-align: left; }
