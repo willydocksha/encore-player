@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /drive
+Disallow: /title
+
+Sitemap: https://encore-player.vercel.app/sitemap.xml
