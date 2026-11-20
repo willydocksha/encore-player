@@ -177,7 +177,7 @@ function renderConnect() {
     acts.append(mkBtn("Coba lagi", tryConnect, true));
   } else if (st === "outdated") {
     title("Encore App di komputermu versi lama");
-    para("Halaman ini sudah lebih baru dari app-nya. Download versi terbaru di bawah, pasang ulang, lalu buka lagi.");
+    para(`Versi di komputermu: ${server.version || "lama"}. Halaman ini sudah lebih baru dari app-nya. Download versi terbaru di bawah, pasang ulang, lalu buka lagi.`);
     acts.append(mkBtn("Cek lagi", tryConnect, true));
   } else if (st === "missing" && attempted) {
     title("Encore App belum terdeteksi");

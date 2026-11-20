@@ -33,6 +33,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 import ai
+import updater
 from version import APP_VERSION, RELEASES, UI_API
 from pipeline import (DRIVE_PRIVATE_MSG, DRUM_VERSION, PIPELINE_VERSION, SECTIONS_VERSION, analyze, detect_sections,
                       drive_title, drum_hits, fetch_audio, open_drive, safe_name, shutdown_pool, source_key, stem_layers, write_drum_midi)
@@ -56,6 +57,8 @@ def data_dir() -> Path:
 
 
 DATA = data_dir() / "jobs"
+# written by the in-app update so the restarted app does not open a second tab (main.py)
+RESTART_FLAG = data_dir() / "restarted-by-update"
 DATA.mkdir(parents=True, exist_ok=True)
 ai.setup(data_dir())
 CACHE = data_dir() / "cache"  # original downloads, keyed by video / file id
@@ -518,7 +521,7 @@ def delete_job(job_id: str):
 def health():
     # the web app looks for this route to know it runs inside the encore app
     return {"ok": True, "app": True, "frozen": FROZEN, "platform": sys.platform, "version": PIPELINE_VERSION,
-            "ui_api": UI_API, "ai": ai.status()}
+            "ui_api": UI_API, "app_version": APP_VERSION, "ai": ai.status()}
 
 
 # ---------------------------------------------------------------- sync (online site <-> this app)
@@ -842,7 +845,36 @@ def app_check():
             "url": app_check_cache["url"] or f"{RELEASES}/latest",
             # direct download of this computer's build + the release notes (may be empty)
             "download": f"{RELEASES}/download/app-v{latest}/{APP_FILE}" if latest else None,
-            "notes": app_check_cache["notes"]}
+            "notes": app_check_cache["notes"],
+            # the packaged mac app can replace itself (updater.py), without the "Open Anyway" prompt
+            "can_install": updater.can_install()}
+
+
+def same_site(request: Request) -> bool:
+    """true for a request from this app's own page or the online site (not another website)."""
+    origin = request.headers.get("origin")
+    return not origin or origin in ORIGINS or origin == f"http://{request.headers.get('host')}"
+
+
+@app.post("/api/app/update")
+def app_update(request: Request):
+    if not same_site(request):
+        raise HTTPException(403)
+    if not updater.can_install():
+        raise HTTPException(400, "update otomatis hanya untuk app Mac yang terpasang di folder yang bisa ditulis")
+    latest = app_check_cache["latest"]
+    if not latest or version_tuple(latest) <= version_tuple(APP_VERSION):
+        raise HTTPException(400, "belum ada versi baru")
+    try:
+        url, digest = updater.release_asset(APP_RELEASES_API, latest, APP_FILE)
+    except (OSError, ValueError, KeyError) as err:
+        raise HTTPException(502, f"rilis tidak bisa dibaca: {err}")
+    return {"started": updater.start(url, digest, latest, RESTART_FLAG)}
+
+
+@app.get("/api/app/update/status")
+def app_update_status():
+    return updater.status
 
 
 # ---------------------------------------------------------------- web app

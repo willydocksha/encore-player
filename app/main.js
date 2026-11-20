@@ -1,6 +1,6 @@
 // boot: routes, cross-section wiring, shortcuts, service worker
 
-import { $, router, server, store } from "./core.js";
+import { $, router, server, store, onlineSite } from "./core.js";
 import { initPlaylist, onSendToBass, importShared } from "./playlist.js";
 import { initBass, enterBassHome, enterSong, leaveSong, submitLink } from "./bass.js";
 import { startTour, maybeStartTour } from "./tour.js";
@@ -52,7 +52,10 @@ initMetronome();
 // its first, synchronous part only saved the defaults; from here on saved changes count as the newest (sync.js)
 store.booting = false;
 // the bass pages depend on the local server, so learn whether it is there before routing
-server.check().then(() => { router.resolve(); maybeStartTour(); if (server.mode === "app") checkAppUpdate(); });
+// opened by the app itself (?app=1): connect right away instead of waiting for a click, and tidy the address
+const fromApp = onlineSite && /[?&]app=1\b/.test(location.search);
+if (fromApp) history.replaceState(null, "", location.pathname + location.hash);
+server.check({ prompt: fromApp }).then(() => { router.resolve(); maybeStartTour(); if (server.mode === "app") checkAppUpdate(); });
 // each page shows its own tour the first time it is opened
 addEventListener("hashchange", () => maybeStartTour());
 

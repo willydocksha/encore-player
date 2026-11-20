@@ -221,6 +221,7 @@ export const server = {
   analysis: false,
   mode: "web", // "app" inside the encore app, or on the online site once it reached the app
   ai: null,
+  version: null, // the app's own version (health.app_version)
   checked: false,
   // where the app's api lives: "" when this page is served by the app, else its localhost address
   base: "",
@@ -252,6 +253,7 @@ export const server = {
         const r = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(wait) });
         const d = r.ok ? await r.json() : {};
         if (d.app) {
+          this.version = d.app_version || null;
           this.ai = d.ai || null; // the optional ai engine (aimode.js)
           // the app's own page always matches it; the online ui needs a recent enough app
           if (!onlineSite || (d.ui_api || 0) >= MIN_APP_API) { ok = true; state = ""; }
@@ -278,7 +280,7 @@ export const server = {
     s.classList.toggle("on", ok);
     s.classList.toggle("off", !ok);
     s.classList.toggle("soon", !ok);
-    s.querySelector(".server-text").textContent = ok ? "Encore App tersambung" : "Breakdown ada di Encore App";
+    s.querySelector(".server-text").textContent = ok ? `Encore App${this.version ? " " + this.version : ""} tersambung` : "Breakdown ada di Encore App";
     $("#navSoon").hidden = ok;
     $("#quitApp").hidden = !ok;
     document.body.classList.toggle("in-app", ok);
