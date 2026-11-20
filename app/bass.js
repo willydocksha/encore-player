@@ -2037,6 +2037,8 @@ const player = (() => {
     stop();
     addToPlaylist(song.url, song.title, { start: loop.a, end: loop.b });
   }
+  // klik A saat A sudah ada: lompat ke A; shift+klik / shift+A: pasang ulang A di posisi sekarang
+  function clickA(e) { if (loop.a != null && !e?.shiftKey) { seek(loop.a); return; } setA(); }
   function setA() { loop.a = now(); if (loop.b != null && loop.b <= loop.a) loop.b = null; syncLoopUi(); }
   function setB() { const t = now(); if (loop.a == null || t <= loop.a) return; loop.b = t; loop.on = true; syncLoopUi(); }
   function toggleLoop() { if (loop.a != null && loop.b != null) { loop.on = !loop.on; syncLoopUi(); } }
@@ -2097,7 +2099,7 @@ const player = (() => {
   $("#clickToggle").addEventListener("click", () => setClick({ on: !click.on }));
   $("#clickCount").addEventListener("click", () => setClick({ count: !click.count }));
   $("#clickVol").addEventListener("input", (e) => setClick({ vol: +e.target.value }));
-  $("#loopA").addEventListener("click", setA);
+  $("#loopA").addEventListener("click", clickA);
   $("#loopB").addEventListener("click", setB);
   $("#loopToggle").addEventListener("click", toggleLoop);
   $("#loopClear").addEventListener("click", clearLoop);
@@ -2119,7 +2121,7 @@ const player = (() => {
     if (e.code === "Space") { e.preventDefault(); toggle(); }
     else if (k === "arrowleft") { e.preventDefault(); seek(now() - 2); }
     else if (k === "arrowright") { e.preventDefault(); seek(now() + 2); }
-    else if (k === "a") setA();
+    else if (k === "a") clickA(e);
     else if (k === "b") setB();
     else if (k === "l") toggleLoop();
     else if (k === "-") setPitch(pitch - 1);
