@@ -373,9 +373,12 @@ select { background: var(--surface-2); border: 1px solid var(--line); border-rad
   width: max-content; max-width: 220px; padding: 6px 9px; border-radius: 8px; z-index: 20;
   background: var(--surface-2); border: 1px solid var(--line); box-shadow: 0 6px 18px rgba(0,0,0,.35);
   font: 500 .74rem/1.4 var(--f-body); color: var(--ink); text-align: left; white-space: normal;
-  opacity: 0; pointer-events: none; transition: opacity .12s;
+  /* not rendered until shown: a hidden bubble below the last row of a scroll box (the playlist) still
+     counted as scrollable space and showed up as an empty extra row */
+  display: none; pointer-events: none;
 }
-[data-tip]:hover::after, [data-tip]:focus-visible::after { opacity: 1; }
+[data-tip]:hover::after, [data-tip]:focus-visible::after { display: block; animation: tip-in .12s; }
+@keyframes tip-in { from { opacity: 0; } }
 .queue-sub { margin: 2px 0 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .link-btn { border: 0; background: none; padding: 0; font: .76rem var(--f-body); color: var(--accent); cursor: pointer; text-align: left; }
 .link-btn.ghost { color: var(--ok); cursor: default; display: inline-grid; place-items: center; }
