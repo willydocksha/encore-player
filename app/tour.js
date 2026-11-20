@@ -62,7 +62,7 @@ const tours = {
     {
       target: ".tools .tool:nth-child(2)",
       title: "Loop A–B",
-      text: "Klik Set A di awal bagian yang mau dilatih, lalu Set B di akhirnya. Bagian itu akan diputar terus sampai loop dihapus.",
+      text: "Klik A di awal bagian yang mau dilatih, lalu B di akhirnya. Bagian itu diputar terus; tombol On/Off menjeda loop tanpa menghapusnya, dan X menghapusnya.",
     },
     {
       target: ".tools .tool:nth-child(3)",

@@ -190,12 +190,13 @@
               <p class="tool-hint pitch-note">Setengah nada per langkah, tempo tetap. Disimpan per lagu.</p>
             </div>
             <div class="card tool">
-              <div class="tool-head"><h3>Loop A–B</h3><span class="tool-val sm" id="abText">Belum ada</span></div>
+              <div class="tool-head"><h3>Loop A–B</h3></div>
               <div class="seg">
-                <button type="button" id="setA" title="Set titik A (A)">Set A</button>
-                <button type="button" id="setB" title="Set titik B (B)">Set B</button>
-                <button type="button" id="gotoA" title="Pindah ke titik A" hidden>Ke A</button>
-                <button type="button" id="clearAB" title="Hapus loop (C)">Hapus</button>
+                <button type="button" id="setA" title="Set titik A (A)">A</button>
+                <button type="button" id="gotoA" title="Lompat ke titik A" aria-label="Lompat ke titik A" hidden><svg><use href="#i-prev"/></svg></button>
+                <button type="button" id="setB" title="Set titik B (B)">B</button>
+                <button type="button" id="abToggle" title="Loop on/off">Off</button>
+                <button type="button" id="clearAB" title="Hapus loop (C)" aria-label="Hapus loop"><svg><use href="#i-x"/></svg></button>
               </div>
               <p class="tool-hint">Geser penanda A/B di progress bar untuk merapikan loop.</p>
             </div>

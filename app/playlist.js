@@ -15,7 +15,7 @@ let autonext = store.get("lp-autonext", true);
 let rate = store.get("lp-rate", 1);
 let cur = null;
 let yt = null, ytReady = false, ytApi = null, pendingYT = null;
-let A = null, B = null, history = [], loadTok = 0;
+let A = null, B = null, abOn = false, history = [], loadTok = 0;
 
 function save() { store.set("lp-playlist", list); store.set("lp-index", idx); }
 
@@ -1108,22 +1108,31 @@ paintNorm();
 // ------------------------------------------------------------------ a-b loop (buttons + draggable handles on the seek bar)
 function updateAB() {
   const z = $("#loopzone"), d = P.dur();
-  $("#abText").textContent = A == null && B == null ? "Belum ada" : `${A != null ? fmtTime(A) : "—"} → ${B != null ? fmtTime(B) : "—"}`;
+  // the loop can only be on while both points exist
+  if (A == null || B == null) abOn = false;
+  // same buttons as the breakdown dock: the time sits on the button once a point is set
+  $("#setA").textContent = A != null ? `A ${fmtTime(A)}` : "A";
+  $("#setB").textContent = B != null ? `B ${fmtTime(B)}` : "B";
   $("#setA").classList.toggle("on", A != null);
   $("#setB").classList.toggle("on", B != null);
+  $("#abToggle").textContent = abOn ? "On" : "Off";
+  $("#abToggle").classList.toggle("on", abOn);
   // tombol pindah ke A hanya muncul kalau A sudah ada
   $("#gotoA").hidden = A == null;
   if (A != null && B != null && d) {
     z.style.display = "block";
     z.style.left = (A / d) * 100 + "%";
     z.style.width = ((B - A) / d) * 100 + "%";
+    z.style.opacity = abOn ? "" : ".45";
   } else z.style.display = "none";
 }
 function setA() { if (!cur) return; A = P.time(); if (B != null && B <= A) B = null; updateAB(); }
-function setB() { if (!cur) return; const t = P.time(); if (A == null) A = 0; if (t > A) B = t; updateAB(); if (B != null) P.seek(A); }
-function clearAB() { A = B = null; updateAB(); }
+function setB() { if (!cur) return; const t = P.time(); if (A == null) A = 0; if (t > A) { B = t; abOn = true; } updateAB(); if (B != null) P.seek(A); }
+function toggleAB() { if (A != null && B != null) { abOn = !abOn; updateAB(); } }
+function clearAB() { A = B = null; abOn = false; updateAB(); }
 $("#setA").onclick = setA;
 $("#setB").onclick = setB;
+$("#abToggle").onclick = toggleAB;
 $("#clearAB").onclick = clearAB;
 // pindah playhead ke titik A tanpa mengubah loop
 $("#gotoA").onclick = () => { if (A != null) P.seek(A); };
@@ -1168,7 +1177,7 @@ function paintSections() {
     b.dataset.full = p.label;
     // click jumps to the part, double click turns it into the a-b loop
     b.onclick = () => { P.seek(p.t); render(); };
-    b.ondblclick = () => { A = p.t; B = secEnd(i); updateAB(); P.seek(A); };
+    b.ondblclick = () => { A = p.t; B = secEnd(i); abOn = true; updateAB(); P.seek(A); };
     secBox.append(b);
   });
   fitSections();
@@ -1263,7 +1272,7 @@ function checkClipEnd() {
 setInterval(() => {
   if (!cur) return;
   checkClipEnd();
-  if (A != null && B != null && P.time() >= B) P.seek(A);
+  if (abOn && A != null && B != null && P.time() >= B) P.seek(A);
   if (!dragging) render();
 }, 150);
 audio.onloadedmetadata = () => { updateAB(); render(); };
