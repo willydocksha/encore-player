@@ -3,7 +3,7 @@
 Teman latihan musikmu. Encore punya empat bagian:
 
 - **Playlist**: media player latihan dari link YouTube dan Google Drive, dengan loop A–B dan kecepatan. Jalan di mana saja, termasuk Vercel dan HP.
-- **Breakdown**: memisahkan instrumen (drum, bass, vokal, gitar, piano, lainnya), menampilkan not bass, melodi vokal, dan chord-nya. Prosesnya berat, jadi Breakdown hanya jalan di **Encore App** (Mac, Windows, Linux) di komputer pengguna. Di versi web, menu Breakdown berisi halaman download app-nya.
+- **Breakdown**: memisahkan instrumen (drum, bass, vokal, gitar, piano, lainnya), menampilkan not bass, melodi vokal, dan chord-nya. Prosesnya berat, jadi Breakdown hanya jalan di **Encore App** (Mac, Windows, Linux) di komputer pengguna. Di versi web, menu Breakdown berisi halaman download app-nya. Kalau Encore App sudah terpasang dan dibuka, klik **Hubungkan** sekali: Breakdown langsung jalan di halaman web itu (browser meminta izin jaringan lokal), tanpa buka `localhost:8765`. Di browser yang menolak (misalnya Safari), halaman menunjukkan langkah izin atau arahan membuka `localhost:8765`, yang tetap jalan offline.
 - **Perfect Pitch**: latihan mengenali nada tanpa acuan, level demi level.
 - **Tuner**: stem gitar, bass, ukulele, atau biola lewat mikrofon atau audio interface, sekaligus cek nada apa yang sedang masuk dan frekuensi mana yang terlalu kencang saat slap.
 

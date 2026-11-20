@@ -1,6 +1,6 @@
 // bass section (delve): separate the stems, transcribe notes, detect chords. runs in the encore app (backend/).
 
-import { $, $$, el, icon, setIcon, store, fmtTime, textOverflows, fmtDate, fmtAgo, parseLink, toast, confirmDialog, showMenu, server, media, router, onKeys, api } from "./core.js";
+import { $, $$, el, icon, setIcon, store, fmtTime, textOverflows, fmtDate, fmtAgo, parseLink, toast, confirmDialog, showMenu, server, onlineSite, media, router, onKeys, api } from "./core.js";
 import { pitchNode, fmtSemis, clampSemis, PITCH_LATENCY } from "./pitch.js";
 import { renderGetApp } from "./getapp.js";
 import { MODE_LABEL, pickMode, ensureAi } from "./aimode.js";
@@ -89,7 +89,7 @@ window.addEventListener("drop", (e) => {
 });
 
 // stem / midi file of a finished song, served by the app
-const fileUrl = (id, name) => `/api/jobs/${id}/files/${encodeURIComponent(name)}`;
+const fileUrl = (id, name) => server.url(`/api/jobs/${id}/files/${encodeURIComponent(name)}`);
 
 // create a job for a link; the app returns the existing one for a known file
 export async function submitLink(url, title) {
@@ -535,7 +535,10 @@ const player = (() => {
     box.replaceChildren();
     const prefs = store.get("bass-mixer", {});
     tracks = ORDER.filter((n) => audioMap[n]).map((name) => {
-      const a = new Audio(song.audioUrls[name]);
+      // the online page reaches the app across origins; web audio needs cors for that
+      const a = new Audio();
+      a.crossOrigin = "anonymous";
+      a.src = song.audioUrls[name];
       a.preload = "auto";
       a.preservesPitch = true;
       a.playbackRate = speed;
@@ -2254,13 +2257,15 @@ async function downloadMidi(id, name, title, label) {
 
 export function initBass() {
   $("#recheckServer").onclick = async () => {
-    await server.check();
+    await server.check({ prompt: true });
     enterBassHome();
-    if (!server.bass) toast("Encore App belum terdeteksi di halaman ini. Kalau app-nya sudah jalan, buka localhost:8765.");
+    if (!server.bass) toast("Encore App belum terdeteksi. Pastikan app-nya sudah dibuka, lalu coba lagi.");
   };
   $("#quitApp").onclick = async () => {
     if (!(await confirmDialog("Tutup Encore App?", "Lagu yang sedang diproses akan dilanjutkan saat Encore dibuka lagi.", { ok: "Tutup" }))) return;
-    try { await fetch("/api/quit", { method: "POST" }); } catch { /* already gone */ }
+    try { await fetch(server.url("/api/quit"), { method: "POST" }); } catch { /* already gone */ }
+    // the online site stays usable without the app; only the app's own page has nothing left to show
+    if (onlineSite) { await new Promise((r) => setTimeout(r, 600)); await server.check(); enterBassHome(); toast("Encore App sudah ditutup."); return; }
     document.body.replaceChildren(el("p", "app-closed", "Encore App sudah ditutup. Tab ini boleh ditutup juga."));
   };
   server.onChange((on) => {

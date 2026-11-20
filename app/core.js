@@ -76,7 +76,7 @@ export const fmtAgo = (sec) => {
 };
 
 export async function api(path, opts) {
-  const r = await fetch(path, opts);
+  const r = await fetch(path.startsWith("/api/") ? server.url(path) : path, opts);
   if (!r.ok) {
     let msg = r.statusText;
     try { msg = (await r.json()).detail || msg; } catch {}
@@ -199,22 +199,76 @@ document.addEventListener("scroll", closeMenu, true);
 // breakdown runs in the encore app (python server on this computer, see backend/). the web version
 // has no /api/health, so there it shows the download page instead.
 
+// the online site (and the dev server on 878x) reaches the app on this computer across origins
+export const ONLINE = "https://encore-player.vercel.app";
+export const APP = "http://localhost:8765";
+export const onlineSite = location.origin === ONLINE || /^878\d$/.test(location.port);
+// the oldest app api the online ui can drive (health.ui_api, backend/version.py UI_API)
+const MIN_APP_API = 3;
+
+// chrome's local network permission for this page: "granted" | "prompt" | "denied", or null when
+// the browser has no such permission (safari, firefox). the name changed between chrome versions
+async function localPermission() {
+  for (const name of ["loopback-network", "local-network-access", "local-network"]) {
+    try { return (await navigator.permissions.query({ name })).state; } catch { /* try the next name */ }
+  }
+  return null;
+}
+
 export const server = {
   bass: false,
   youtube: false,
   analysis: false,
-  mode: "web", // "app" inside the encore app
+  mode: "web", // "app" inside the encore app, or on the online site once it reached the app
   ai: null,
   checked: false,
+  // where the app's api lives: "" when this page is served by the app, else its localhost address
+  base: "",
+  // why breakdown is off: "idle" (online, not tried yet), "missing" (no answer), "blocked" (chrome
+  // permission denied), "unreachable" (browser without the permission, probably blocking localhost),
+  // "outdated" (the app answers but is too old for this ui), "" when it works
+  state: "idle",
+  tried: false,
   listeners: new Set(),
-  async check() {
+  url(path) { return this.base + path; },
+  // prompt: the visitor asked for it (a click), so chrome may ask for local network access now
+  async check({ prompt = false } = {}) {
     let ok = false;
-    try {
-      const r = await fetch("/api/health", { cache: "no-store", signal: AbortSignal.timeout(3000) });
-      const d = r.ok ? await r.json() : {};
-      ok = !!d.app;
-      this.ai = d.ai || null; // the optional ai engine (aimode.js)
-    } catch { /* web version, or the app was closed */ }
+    let state = "idle";
+    let base = "";
+    let url = "/api/health";
+    let wait = 3000;
+    let probe = true;
+    if (onlineSite) {
+      base = APP;
+      url = APP + "/api/health";
+      // without a click only probe when no prompt can pop up: connected before, or already allowed
+      probe = prompt || store.get("sync-app", false) || (await localPermission()) === "granted";
+      if (prompt) wait = 30000; // the permission prompt waits for the visitor
+      if (prompt) this.tried = true;
+    }
+    if (probe) {
+      try {
+        const r = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(wait) });
+        const d = r.ok ? await r.json() : {};
+        if (d.app) {
+          this.ai = d.ai || null; // the optional ai engine (aimode.js)
+          // the app's own page always matches it; the online ui needs a recent enough app
+          if (!onlineSite || (d.ui_api || 0) >= MIN_APP_API) { ok = true; state = ""; }
+          else state = "outdated";
+        }
+      } catch { /* web version, or the app was closed */ }
+      if (!ok && state !== "outdated") {
+        if (!onlineSite) state = "missing";
+        else {
+          const perm = await localPermission();
+          state = perm === "denied" ? "blocked" : perm == null ? "unreachable" : "missing";
+        }
+      }
+    }
+    this.base = ok && onlineSite ? base : "";
+    this.state = state;
+    if (ok && onlineSite && !store.get("sync-app", false)) store.set("sync-app", true); // remembered, so the next visit connects silently
     this.bass = ok;
     this.analysis = ok;
     this.youtube = ok; // the app downloads youtube audio itself

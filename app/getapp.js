@@ -1,8 +1,8 @@
 // web version of breakdown: point visitors to the encore app build for their computer
 
-import { $, el, toast, store } from "./core.js";
+import { $, el, toast, store, server, onlineSite, APP } from "./core.js";
 import { APP_RELEASES, APP_FILES } from "./config.js";
-import { connect, isConnected } from "./sync.js";
+import { connect } from "./sync.js";
 
 const fileUrl = (os) => `${APP_RELEASES}/download/${APP_FILES[os].file}`;
 
@@ -73,7 +73,7 @@ function showFirstOpen(os) {
 }
 
 export function renderGetApp() {
-  renderSync();
+  renderConnect();
   const os = guessOs();
   const main = $("#getMain");
   const others = Object.keys(APP_FILES).filter((k) => k !== os);
@@ -106,24 +106,88 @@ export function renderGetApp() {
   $("#getOther").replaceChildren(...out);
 }
 
-// online site: share the playlist with the encore app in this browser (sync.js)
-function renderSync() {
-  const line = $("#syncLine");
-  line.hidden = location.origin !== "https://encore-player.vercel.app";
-  if (line.hidden) return;
-  if (isConnected()) {
-    line.replaceChildren("✓ Playlist di sini tersinkron dengan Encore App di komputer ini.");
-    return;
-  }
-  const b = el("button", "link-btn", store.get("sync-app", false) ? "Sambungkan lagi" : "Sambungkan playlist");
+// ------------------------------------------------------------------ online site: connect to the app
+
+// the browser's own settings page for this site, which a web page cannot open itself
+function settingsAddress() {
+  const scheme = navigator.brave ? "brave" : /Edg\//.test(navigator.userAgent) ? "edge" : "chrome";
+  return `${scheme}://settings/content/siteDetails?site=${encodeURIComponent(location.origin)}`;
+}
+
+// small picture of the address bar: the icon to click is highlighted
+function addressBarPicture() {
+  const wrap = el("div", "get-bar");
+  wrap.setAttribute("role", "img");
+  wrap.setAttribute("aria-label", "Ikon di sebelah kiri alamat situs di address bar");
+  const icon = el("span", "get-bar-icon");
+  icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8h10M18 8h2M4 16h2M10 16h10"/><circle cx="16" cy="8" r="2"/><circle cx="8" cy="16" r="2"/></svg>';
+  wrap.append(icon, el("span", "get-bar-url", location.host), el("span", "get-bar-hint", "← klik ini"));
+  return wrap;
+}
+
+const mkBtn = (label, onClick, primary) => {
+  const b = el("button", "btn" + (primary ? " primary" : ""), label);
   b.type = "button";
-  b.onclick = async () => {
-    b.disabled = true;
-    b.textContent = "Menyambungkan…";
-    const ok = await connect();
-    toast(ok ? "Tersambung! Playlist di sini dan di Encore App sekarang sama."
-      : "Encore App belum terdeteksi. Pastikan app-nya jalan, lalu klik Izinkan kalau browser bertanya soal jaringan lokal.", { error: !ok, ms: 8000 });
-    renderSync();
-  };
-  line.replaceChildren("Sudah pasang Encore App? ", b, " supaya playlist di sini dan di app selalu sama (di browser ini).");
+  b.onclick = () => onClick(b);
+  return b;
+};
+
+// ask the app again; the page repaints itself when the answer comes (server.onChange)
+async function tryConnect(b) {
+  b.disabled = true;
+  b.textContent = "Menyambungkan…";
+  const ok = await server.check({ prompt: true });
+  if (ok) {
+    connect().catch(() => {}); // the playlist follows the app too
+    toast("Tersambung! Breakdown sekarang bisa dipakai di sini.");
+  }
+}
+
+// what the connect card says for each reason breakdown is off here (see server.state)
+function renderConnect() {
+  const box = $("#getConnect");
+  box.hidden = !onlineSite;
+  if (!onlineSite) return;
+  const st = server.state;
+  const attempted = server.tried || store.get("sync-app", false);
+  const text = el("div", "get-connect-text");
+  const acts = el("div", "get-connect-actions");
+  const title = (t) => text.append(el("b", null, t));
+  const para = (t) => text.append(el("p", null, t));
+  if (st === "blocked") {
+    title("Browser ini menolak sambungan ke Encore App");
+    para("Encore App-nya mungkin sudah jalan, tapi izin jaringan lokal untuk situs ini sedang ditolak. Biar bisa, ubah izinnya sekali saja:");
+    const ol = el("ol", "get-connect-steps");
+    ["Klik ikon di kiri alamat situs (lihat gambar), lalu pilih <b>Setelan situs</b>.",
+      "Cari <b>Perangkat di jaringan lokal</b> (atau <i>Local network access</i>), ubah jadi <b>Izinkan</b>.",
+      "Kembali ke sini, lalu klik <b>Coba lagi</b>."].forEach((h) => { const li = el("li"); li.innerHTML = h; ol.append(li); });
+    text.append(addressBarPicture(), ol);
+    para("Ikonnya tidak ketemu? Salin alamat pengaturan di bawah, tempel di address bar, lalu tekan Enter.");
+    acts.append(mkBtn("Coba lagi", tryConnect, true), mkBtn("Salin alamat pengaturan", async () => {
+      try { await navigator.clipboard.writeText(settingsAddress()); toast("Alamat disalin. Tempel di address bar, lalu tekan Enter."); }
+      catch { toast(settingsAddress(), { ms: 12000 }); }
+    }));
+  } else if (st === "unreachable") {
+    title("Susah membuka Breakdown di browser ini?");
+    para("Kalau Encore App sudah dibuka tapi tetap tidak tersambung, browser ini kemungkinan tidak mengizinkan halaman web bicara dengan app di komputermu (biasanya Safari). Ada dua cara gampang:");
+    const ol = el("ol", "get-connect-steps");
+    ["Buka halaman ini lewat <b>Chrome</b> atau <b>Edge</b>.",
+      `Atau buka langsung <a href="${APP}/#/breakdown"><b>localhost:8765</b></a>. Tampilannya sama persis dan tidak butuh internet.`].forEach((h) => { const li = el("li"); li.innerHTML = h; ol.append(li); });
+    text.append(ol);
+    acts.append(mkBtn("Coba lagi", tryConnect, true));
+  } else if (st === "outdated") {
+    title("Encore App di komputermu versi lama");
+    para("Halaman ini sudah lebih baru dari app-nya. Download versi terbaru di bawah, pasang ulang, lalu buka lagi.");
+    acts.append(mkBtn("Cek lagi", tryConnect, true));
+  } else if (st === "missing" && attempted) {
+    title("Encore App belum terdeteksi");
+    para("Pastikan Encore App sudah dibuka dan jendelanya tidak ditutup. Kalau baru dibuka, tunggu beberapa detik.");
+    acts.append(mkBtn("Coba lagi", tryConnect, true));
+  } else {
+    title("Sudah pasang Encore App?");
+    para("Buka app-nya, lalu klik Hubungkan. Breakdown langsung jalan di halaman ini, tanpa pindah ke localhost. Browser mungkin bertanya soal jaringan lokal, pilih Izinkan.");
+    acts.append(mkBtn("Hubungkan", tryConnect, true));
+  }
+  box.className = "card get-connect" + (st === "blocked" || st === "unreachable" || st === "outdated" ? " warn" : "");
+  box.replaceChildren(text, acts);
 }

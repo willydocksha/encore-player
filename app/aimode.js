@@ -34,7 +34,7 @@ export async function pickMode(title) {
 
 async function aiStatus() {
   try {
-    const r = await fetch("/api/health", { cache: "no-store" });
+    const r = await fetch(server.url("/api/health"), { cache: "no-store" });
     server.ai = (await r.json()).ai;
   } catch { /* app closed */ }
   return server.ai || {};
@@ -90,7 +90,7 @@ export async function ensureAi() {
   };
   $("#aiInstall").onclick = async () => {
     $("#aiError").hidden = true;
-    try { await fetch("/api/ai/install", { method: "POST" }); } catch { /* shown by watch */ }
+    try { await fetch(server.url("/api/ai/install"), { method: "POST" }); } catch { /* shown by watch */ }
     watch();
   };
   d.returnValue = "";

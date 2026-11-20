@@ -2,12 +2,8 @@
 // the browser keeps the two addresses apart, so the app on this computer holds the shared copy
 // (/api/sync) and both pages sync with it. the online site only does this after "Sambungkan".
 
-import { store, SYNC_KEYS, toast } from "./core.js";
+import { store, SYNC_KEYS, toast, APP, onlineSite } from "./core.js";
 
-const ONLINE = "https://encore-player.vercel.app";
-const APP = "http://localhost:8765";
-// the dev server (878x) acts like the online site, so its connect button can be checked locally
-const onlineSite = location.origin === ONLINE || /^878\d$/.test(location.port);
 const listeners = new Set();
 let connected = false;
 

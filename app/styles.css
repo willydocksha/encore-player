@@ -518,6 +518,21 @@ kbd { font: .74rem var(--f-mono); border: 1px solid var(--line); border-bottom-w
 .get-perks span { display: inline-flex; align-items: center; gap: 8px; font-size: .84rem; color: var(--ink-2); background: var(--surface); border: 1px solid var(--line); padding: 7px 12px; border-radius: 99px; }
 .get-perks svg { width: 16px; height: 16px; color: var(--bass); }
 .get-foot { margin: 4px 4px 0; font-size: .84rem; color: var(--muted); }
+
+/* online site: connect the page to the encore app on this computer */
+.get-connect { display: flex; align-items: center; gap: 16px; padding: 16px 18px; border-color: color-mix(in srgb, var(--accent) 30%, transparent); background: var(--accent-soft); }
+.get-connect.warn { background: color-mix(in srgb, var(--warn, #e0892b) 12%, var(--surface, transparent)); border-color: color-mix(in srgb, var(--warn, #e0892b) 40%, transparent); }
+.get-connect-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.get-connect-text p { margin: 0; font-size: .88rem; color: var(--muted); }
+.get-connect-actions { display: flex; flex-wrap: wrap; gap: 8px; flex: none; }
+.get-connect-steps { margin: 2px 0; padding-left: 20px; font-size: .88rem; display: flex; flex-direction: column; gap: 4px; }
+.get-connect-steps a { color: var(--bass); font-weight: 600; }
+.get-bar { display: flex; align-items: center; gap: 8px; align-self: flex-start; padding: 6px 12px 6px 6px; border-radius: 999px; background: var(--surface, #fff); border: 1px solid var(--line, rgba(128,128,128,.3)); font-size: .84rem; }
+.get-bar-icon { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); outline: 2px solid var(--accent); outline-offset: 1px; }
+.get-bar-icon svg { width: 16px; height: 16px; }
+.get-bar-url { color: var(--muted); }
+.get-bar-hint { color: var(--accent); font-weight: 600; }
+@media (max-width: 640px) { .get-connect { flex-direction: column; align-items: stretch; } }
 .app-closed { margin: 30vh auto 0; text-align: center; color: var(--muted); font-size: 1.05rem; padding: 0 16px; }
 @media (max-width: 900px) {
   .get-hero { grid-template-columns: minmax(0, 1fr); padding: 22px; }

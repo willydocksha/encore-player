@@ -1,7 +1,7 @@
 // encore app only: a small banner when a newer app release is out on github (/api/app/check).
 // the ui updates itself (uiupdate.js), but the app itself needs a new download.
 
-import { $, router } from "./core.js";
+import { $, router, server } from "./core.js";
 import { APP_RELEASES, APP_FILES } from "./config.js";
 
 const DISMISSED = "app-update-dismissed";
@@ -74,7 +74,7 @@ export async function checkAppUpdate() {
   // ask the app; the web version has no such route, offline just answers "not available"
   let info;
   try {
-    const r = await fetch("/api/app/check", { cache: "no-store", signal: AbortSignal.timeout(10000) });
+    const r = await fetch(server.url("/api/app/check"), { cache: "no-store", signal: AbortSignal.timeout(10000) });
     if (!r.ok) return;
     info = await r.json();
   } catch { return; }

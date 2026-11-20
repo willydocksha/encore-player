@@ -7,5 +7,6 @@ ENGINE_VERSION = 1
 ENGINE_FINGERPRINT = "2546294557df29cd"
 RELEASES = "https://github.com/willy-docksha/encore-player/releases"
 # which encore app endpoints the ui may use; the online site's /api/ui says what its ui needs (api/ui.js API).
-# a newer ui is only pulled in when it needs no more than this app offers
-UI_API = 2
+# a newer ui is only pulled in when it needs no more than this app offers.
+# 3: cors for the online site to drive breakdown across origins (the online ui needs health.ui_api >= 3)
+UI_API = 3

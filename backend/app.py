@@ -85,11 +85,14 @@ async def no_cache_frontend(request, call_next):
     return response
 
 
-# the online site may reach this app to share its playlist (sync below); chrome asks the user once
-# for "local network" access, which needs the private network header on the preflight
+# the online site drives this app from the visitor's browser (breakdown, playlist sync); chrome asks
+# the user once for "local network" access, which needs the private network header on the preflight.
+# ENCORE_DEV_ORIGINS (comma separated) adds origins for testing the web ui from the dev server
 ONLINE = "https://encore-player.vercel.app"
-app.add_middleware(CORSMiddleware, allow_origins=[ONLINE], allow_methods=["GET", "POST", "PUT"],
-                   allow_headers=["content-type"], allow_private_network=True)
+ORIGINS = [ONLINE] + [o for o in os.environ.get("ENCORE_DEV_ORIGINS", "").split(",") if o]
+app.add_middleware(CORSMiddleware, allow_origins=ORIGINS, allow_methods=["GET", "POST", "PUT", "DELETE"],
+                   allow_headers=["content-type", "range"], expose_headers=["content-length", "content-range", "accept-ranges", "content-disposition"],
+                   allow_private_network=True)
 
 download_pool = ThreadPoolExecutor(max_workers=2)
 analysis_pool = ThreadPoolExecutor(max_workers=1)  # demucs is heavy, one song at a time
@@ -515,7 +518,7 @@ def delete_job(job_id: str):
 def health():
     # the web app looks for this route to know it runs inside the encore app
     return {"ok": True, "app": True, "frozen": FROZEN, "platform": sys.platform, "version": PIPELINE_VERSION,
-            "ai": ai.status()}
+            "ui_api": UI_API, "ai": ai.status()}
 
 
 # ---------------------------------------------------------------- sync (online site <-> this app)
