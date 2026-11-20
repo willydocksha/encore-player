@@ -1111,6 +1111,8 @@ function updateAB() {
   $("#abText").textContent = A == null && B == null ? "Belum ada" : `${A != null ? fmtTime(A) : "—"} → ${B != null ? fmtTime(B) : "—"}`;
   $("#setA").classList.toggle("on", A != null);
   $("#setB").classList.toggle("on", B != null);
+  // tombol pindah ke A hanya muncul kalau A sudah ada
+  $("#gotoA").hidden = A == null;
   if (A != null && B != null && d) {
     z.style.display = "block";
     z.style.left = (A / d) * 100 + "%";
@@ -1123,6 +1125,8 @@ function clearAB() { A = B = null; updateAB(); }
 $("#setA").onclick = setA;
 $("#setB").onclick = setB;
 $("#clearAB").onclick = clearAB;
+// pindah playhead ke titik A tanpa mengubah loop
+$("#gotoA").onclick = () => { if (A != null) P.seek(A); };
 
 // ------------------------------------------------------------------ song parts (from a breakdown in the encore app)
 const secBox = $("#lpSections");
