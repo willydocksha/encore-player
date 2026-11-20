@@ -1,6 +1,6 @@
 // keeps the app itself available offline (network first, cached copy as fallback).
 // drive audio is cached separately by the page in 'encore-audio-v1', the encore app serves breakdown itself.
-const SHELL = 'encore-shell-v32';
+const SHELL = 'encore-shell-v33';
 const FILES = ['/', '/app/styles.css', '/app/core.js', '/app/playlist.js', '/app/bass.js', '/app/score.js', '/app/getapp.js', '/app/aimode.js', '/app/sync.js', '/app/config.js', '/app/tour.js', '/app/ear.js', '/app/tuner.js', '/app/metronome.js', '/app/metrosync.js', '/app/qrscan.js', '/app/spectrum.js', '/app/main.js', '/app/uiupdate.js', '/app/appupdate.js', '/app/pitch.js', '/app/pitch-worklet.js',
   '/manifest.webmanifest', '/icon-180.png', '/icon-192.png', '/icon-512.png'];
 
@@ -16,6 +16,8 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin || /^\/(drive|title|api|models)\b/.test(url.pathname)) return;
+  // landing pages are plain network pages, never stored as the app shell
+  if (e.request.mode === 'navigate' && url.pathname !== '/') return;
   const key = e.request.mode === 'navigate' ? '/' : e.request;
   e.respondWith(
     fetch(e.request).then(res => {

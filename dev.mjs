@@ -30,7 +30,7 @@ http.createServer(async (req, res) => {
     if (fs.existsSync(file) && fs.statSync(file).isDirectory()) file = path.join(file, "index.html");
     // only the web app is served, never the tooling around it
     const rel = path.relative(ROOT, file);
-    const allowed = /^(index\.html|sw\.js|manifest\.webmanifest|icon-\d+\.png|app\/.+)$/.test(rel);
+    const allowed = /^(index\.html|sw\.js|manifest\.webmanifest|icon-\d+\.png|app\/.+|(tuner-gitar-bass-online|metronome-online|latihan-perfect-pitch|loop-ab-youtube)\/index\.html|robots\.txt|sitemap\.xml)$/.test(rel);
     if (!allowed || !fs.existsSync(file)) { res.writeHead(404).end("not found"); return; }
     const { size } = fs.statSync(file);
     res.writeHead(200, { "content-type": TYPES[path.extname(file)] || "application/octet-stream", "content-length": size, "cache-control": "no-cache" });
