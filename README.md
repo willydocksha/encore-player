@@ -1,5 +1,7 @@
 # Encore
 
+**Coba online: [encore-player.vercel.app](https://encore-player.vercel.app)** · [Tuner gitar & bass](https://encore-player.vercel.app/tuner-gitar-bass-online/) · [Metronome](https://encore-player.vercel.app/metronome-online/) · [Latihan perfect pitch](https://encore-player.vercel.app/latihan-perfect-pitch/) · [Player loop A–B](https://encore-player.vercel.app/loop-ab-youtube/)
+
 Teman latihan musikmu. Encore punya empat bagian:
 
 - **Playlist**: media player latihan dari link YouTube dan Google Drive, dengan loop A–B dan kecepatan. Jalan di mana saja, termasuk Vercel dan HP.
