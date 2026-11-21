@@ -1319,3 +1319,8 @@ button.sync-choice:hover { border-color: var(--metro); }
 .sync-lat input { width: 100%; accent-color: var(--metro); }
 .sync-shared .link-btn { font-size: .8rem; color: var(--accent); }
 .sync-join input::placeholder { text-transform: none; letter-spacing: 0; font: 400 .9rem var(--f-body); color: var(--muted); }
+
+/* footer links to the standalone feature pages (also helps search engines find them) */
+.site-links { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 36px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 12.5px; }
+.site-links a { color: var(--muted); text-decoration: none; }
+.site-links a:hover { color: var(--ink); text-decoration: underline; }
